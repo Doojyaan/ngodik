@@ -66,3 +66,17 @@ time { font-size: .875rem; font-weight: 400; }
 .profile-url { overflow-wrap: anywhere; font-size: .95rem; color: var(--muted); }
 .project-model { margin-top: 24px; max-width: 650px; }
 .danger { color: #842923; }
+.draft-panel { margin-top: 24px; }
+.draft-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 8px; }
+.draft-stages li { display: grid; align-content: start; gap: 4px; border: 1px solid var(--line); border-radius: 4px; padding: 10px; }
+.draft-stages span { color: var(--muted); font-size: .9rem; }
+.draft-results { margin-top: 14px; max-width: 840px; overflow-wrap: anywhere; }
+.draft-results:empty { display: none; }
+.draft-overview { border-block: 1px solid var(--line); padding-block: 12px; }
+.draft-results h3, .draft-results h4 { margin: 0 0 6px; }
+.draft-results li { margin: 4px 0; }
+.draft-results ul { list-style: disc; padding-left: 22px; margin-bottom: 10px; }
+.draft-results small { display: block; color: var(--muted); }
+.draft-results details, .draft-previous { margin-top: 8px; }
+.draft-results summary, .draft-previous > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.draft-text { white-space: pre-wrap; }

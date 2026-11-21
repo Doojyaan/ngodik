@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import { DraftPanel } from "./draft-panel";
 import { ProjectModel } from "./model-settings";
 
 type Checkpoint = { revision: number; savedAt: number };
@@ -15,6 +16,7 @@ export function Workspace({ initial, back }: { initial: Project; back: () => voi
   const [idea, setIdea] = useState(initial.idea);
   const [status, setStatus] = useState("Tersimpan di perangkat");
   const [error, setError] = useState("");
+  const [configurationVersion, setConfigurationVersion] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const current = useRef(initial);
   const latest = useRef(initial.idea);
@@ -111,7 +113,9 @@ export function Workspace({ initial, back }: { initial: Project; back: () => voi
           ))}</ol>
         </aside>
       </div>
-      <ProjectModel projectId={project.id} />
+      <ProjectModel projectId={project.id} onSaved={() => setConfigurationVersion((version) => version + 1)} />
+      <DraftPanel projectId={project.id} hasIdea={Boolean(idea.trim())} configurationVersion={configurationVersion}
+        prepare={async () => await save() ? current.current.revision : undefined} />
     </main>
   );
 }

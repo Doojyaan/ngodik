@@ -13,6 +13,10 @@ fn main() {
             "test_connection",
             "project_model",
             "set_project_model",
+            "draft_status",
+            "start_draft",
+            "resume_draft",
+            "cancel_draft",
         ]),
     ))
     .expect("failed to build Tauri configuration");

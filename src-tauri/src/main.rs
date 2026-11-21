@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod drafts;
 mod projects;
 mod providers;
 
@@ -43,12 +44,22 @@ fn save_idea(
 }
 
 fn main() {
+    let context = tauri::generate_context!();
+    let Some(_instance) =
+        Instance::acquire(&context.config().identifier).expect("Kunci aplikasi tidak dapat dibuat")
+    else {
+        return;
+    };
     tauri::Builder::default()
         .setup(|app| {
             let directory = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&directory)?;
             let projects = ProjectStore::open(&directory.join("ngodik.sqlite3"))
                 .map_err(|_| std::io::Error::other("Penyimpanan proyek tidak dapat dibuka"))?;
+            app.manage(
+                drafts::Drafts::new(directory, &projects)
+                    .map_err(|_| std::io::Error::other("Checkpoint draf tidak dapat dibuka"))?,
+            );
             app.manage(Mutex::new(projects));
             app.manage(
                 providers::http_client()
@@ -69,7 +80,44 @@ fn main() {
             providers::test_connection,
             providers::project_model,
             providers::set_project_model,
+            drafts::draft_status,
+            drafts::start_draft,
+            drafts::resume_draft,
+            drafts::cancel_draft,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("ngodik gagal dibuka");
+}
+
+struct Instance(windows_sys::Win32::Foundation::HANDLE);
+
+impl Instance {
+    fn acquire(identifier: &str) -> std::io::Result<Option<Self>> {
+        use windows_sys::Win32::{
+            Foundation::{ERROR_ALREADY_EXISTS, GetLastError},
+            System::Threading::CreateMutexW,
+        };
+        let name: Vec<_> = format!("Local\\{identifier}-instance")
+            .encode_utf16()
+            .chain([0])
+            .collect();
+        // An open handle reserves this application instance for the desktop session.
+        unsafe {
+            let handle = CreateMutexW(std::ptr::null(), 0, name.as_ptr());
+            if handle.is_null() {
+                return Err(std::io::Error::last_os_error());
+            }
+            let exists = GetLastError() == ERROR_ALREADY_EXISTS;
+            Ok((!exists).then_some(Self(handle)))
+        }
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        // This handle was returned by CreateMutexW.
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
 }

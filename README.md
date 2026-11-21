@@ -22,3 +22,9 @@ Data disimpan di `%LOCALAPPDATA%\id.ngodik.desktop\ngodik.sqlite3`. Penyimpanan 
 4. Buka proyek, lalu pilih profil dan satu ID model di panel **Model proyek**.
 
 Endpoint remote harus memakai HTTPS. Untuk API di perangkat sendiri, HTTP dapat dipakai pada localhost atau IP loopback. Buat profil baru saat mengganti alamat API agar key lama tetap terkait dengan tujuan semula. Menghapus profil juga melepas pilihan model pada proyek yang memakainya.
+
+## Membuat draf awal
+
+Simpan satu model pada proyek, tulis ide, lalu periksa alamat pengiriman di panel Draf blueprint. Draf menyimpan salinan ide dan tujuan pengiriman saat proses dimulai. Bila proses gagal, dibatalkan, atau terhenti ketika aplikasi ditutup, **Lanjutkan draf** atau **Coba lagi** memakai salinan tersebut dan meneruskan tahap yang belum selesai. **Buat draf baru** memakai ide dan pilihan model terbaru.
+
+Skema kanonis v1 berada di src-tauri/schemas/project-specification.v1.json. Draf awal sudah menjalani pemeriksaan struktur dasar dan ID kebutuhan. QA semantik, revisi, dan ekspor dijadwalkan pada tahap berikutnya.

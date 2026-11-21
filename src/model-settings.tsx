@@ -169,7 +169,7 @@ export function ModelSettings({ back }: { back: () => void }) {
   </main>;
 }
 
-export function ProjectModel({ projectId }: { projectId: number }) {
+export function ProjectModel({ projectId, onSaved }: { projectId: number; onSaved: () => void }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profileId, setProfileId] = useState("");
   const [modelId, setModelId] = useState("");
@@ -224,6 +224,7 @@ export function ProjectModel({ projectId }: { projectId: number }) {
         <button className="primary" disabled={busy || !profile || !modelId.trim()} onClick={() => void run(async () => {
           await invoke("set_project_model", { projectId, profileId, modelId });
           setNotice("Pilihan model proyek tersimpan.");
+          onSaved();
         })}>Pakai model ini</button>
       </div>
       {profile && !profile.hasKey && <p>Tambahkan API key melalui Pengaturan model agar proyek dapat memakai endpoint.</p>}

@@ -49,8 +49,8 @@ pub struct Checkpoint {
 pub struct Project {
     id: i64,
     title: String,
-    idea: String,
-    revision: i64,
+    pub(super) idea: String,
+    pub(super) revision: i64,
     history: Vec<Checkpoint>,
 }
 
@@ -70,8 +70,11 @@ impl ProjectStore {
         }
         match schema {
             0 | 1 => connection.execute_batch(include_str!("../migrations/002_providers.sql"))?,
-            2 => {}
+            2 | 3 => {}
             _ => return Err(ProjectError::StorageUnavailable),
+        }
+        if schema <= 2 {
+            connection.execute_batch(include_str!("../migrations/003_drafts.sql"))?;
         }
         Ok(Self { connection })
     }

@@ -138,7 +138,63 @@ fn route(base: &Url, suffix: &str) -> Result<Url> {
         .map_err(|_| ProviderError::InvalidEndpoint)
 }
 
+pub async fn generate(
+    client: &Client,
+    base: &Url,
+    key: &[u8],
+    model: &str,
+    instruction: &str,
+    data: &str,
+) -> (Result<serde_json::Value>, Option<Duration>) {
+    let mut retry_after = None;
+    let result = async {
+        let body = fetch_with_retry(
+            client.post(route(base, "chat/completions")?).json(&json!({
+                "model": model,
+                "messages": [
+                    {"role":"system", "content":instruction},
+                    {"role":"user", "content":data}
+                ],
+                "stream": false
+            })),
+            key,
+            &mut retry_after,
+        )
+        .await?;
+        let chat: ChatResponse =
+            serde_json::from_slice(&body).map_err(|_| ProviderError::InvalidResponse)?;
+        let content = chat
+            .choices
+            .into_iter()
+            .find(|choice| choice.message.role == "assistant")
+            .and_then(|choice| choice.message.content)
+            .ok_or(ProviderError::InvalidResponse)?;
+        let content = Zeroizing::new(content);
+        let text = content.trim();
+        let text = text
+            .strip_prefix("```json")
+            .or_else(|| text.strip_prefix("```"))
+            .and_then(|text| text.strip_suffix("```"))
+            .unwrap_or(text)
+            .trim();
+        if text.len() > 32 * 1024 {
+            return Err(ProviderError::InvalidResponse);
+        }
+        serde_json::from_str(text).map_err(|_| ProviderError::InvalidResponse)
+    }
+    .await;
+    (result, retry_after)
+}
+
 async fn fetch(request: RequestBuilder, key: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
+    fetch_with_retry(request, key, &mut None).await
+}
+
+async fn fetch_with_retry(
+    request: RequestBuilder,
+    key: &[u8],
+    retry_after: &mut Option<Duration>,
+) -> Result<Zeroizing<Vec<u8>>> {
     if key.is_empty() {
         return Err(ProviderError::MissingKey);
     }
@@ -152,6 +208,22 @@ async fn fetch(request: RequestBuilder, key: &[u8]) -> Result<Zeroizing<Vec<u8>>
         .send()
         .await
         .map_err(network_error)?;
+    *retry_after = response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|text| {
+            text.parse::<u64>()
+                .ok()
+                .map(Duration::from_secs)
+                .or_else(|| {
+                    let date = httpdate::parse_http_date(text).ok()?;
+                    Some(
+                        date.duration_since(std::time::SystemTime::now())
+                            .unwrap_or_default(),
+                    )
+                })
+        });
     match response.status() {
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
             return Err(ProviderError::Unauthorized);

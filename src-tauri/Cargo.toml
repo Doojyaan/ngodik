@@ -15,4 +15,7 @@ serde_json = "1"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security_Credentials"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security_Credentials", "Win32_System_Threading"] }
+tokio = { version = "1", features = ["macros", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+httpdate = "1"

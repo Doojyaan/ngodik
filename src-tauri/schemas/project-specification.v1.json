@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ngodik Project Specification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "title", "summary", "problem", "audience", "goals", "inScope", "outOfScope", "requirements", "decisions", "assumptions", "openQuestions", "applicability"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "title": { "$ref": "#/$defs/text" },
+    "summary": { "$ref": "#/$defs/text" },
+    "problem": { "$ref": "#/$defs/text" },
+    "audience": { "$ref": "#/$defs/text" },
+    "goals": { "$ref": "#/$defs/textList", "minItems": 1 },
+    "inScope": { "$ref": "#/$defs/textList", "minItems": 1 },
+    "outOfScope": { "$ref": "#/$defs/textList" },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "statement", "acceptanceCriteria", "source"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^R-[0-9]{1,6}$" },
+          "kind": { "enum": ["functional", "nonfunctional"] },
+          "statement": { "$ref": "#/$defs/text" },
+          "acceptanceCriteria": { "$ref": "#/$defs/textList", "minItems": 1 },
+          "source": { "$ref": "#/$defs/text" }
+        }
+      }
+    },
+    "decisions": { "$ref": "#/$defs/findings" },
+    "assumptions": { "$ref": "#/$defs/findings" },
+    "openQuestions": { "$ref": "#/$defs/findings" },
+    "applicability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["systemAnalysis", "uiUx", "httpApi"],
+      "properties": {
+        "systemAnalysis": { "type": "boolean" },
+        "uiUx": { "type": "boolean" },
+        "httpApi": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "text": { "type": "string", "pattern": "\\S" },
+    "textList": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["text", "source"],
+        "properties": {
+          "text": { "$ref": "#/$defs/text" },
+          "source": { "$ref": "#/$defs/text" }
+        }
+      }
+    }
+  }
+}

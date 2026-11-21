@@ -19,6 +19,10 @@
     "allow-sync-models",
     "allow-test-connection",
     "allow-project-model",
-    "allow-set-project-model"
+    "allow-set-project-model",
+    "allow-draft-status",
+    "allow-start-draft",
+    "allow-resume-draft",
+    "allow-cancel-draft"
   ]
 }

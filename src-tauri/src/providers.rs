@@ -1,5 +1,5 @@
-mod credentials;
-mod endpoint;
+pub(super) mod credentials;
+pub(super) mod endpoint;
 #[cfg(test)]
 mod tests;
 
@@ -49,15 +49,15 @@ type Result<T> = std::result::Result<T, ProviderError>;
 pub struct Profile {
     id: String,
     label: String,
-    base_url: String,
+    pub(super) base_url: String,
     has_key: bool,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Selection {
-    profile_id: String,
-    model_id: String,
+    pub(super) profile_id: String,
+    pub(super) model_id: String,
 }
 
 fn lock<'a>(store: &'a State<'_, Store>) -> Result<std::sync::MutexGuard<'a, ProjectStore>> {
@@ -73,7 +73,7 @@ fn profile_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Profile> {
     })
 }
 
-fn get_profile(store: &ProjectStore, id: &str) -> Result<Profile> {
+pub(super) fn get_profile(store: &ProjectStore, id: &str) -> Result<Profile> {
     store
         .connection
         .query_row(
@@ -127,7 +127,7 @@ fn require_project(store: &ProjectStore, project: i64) -> Result<()> {
     Ok(())
 }
 
-fn read_selection(store: &ProjectStore, project: i64) -> Result<Option<Selection>> {
+pub(super) fn read_selection(store: &ProjectStore, project: i64) -> Result<Option<Selection>> {
     require_project(store, project)?;
     Ok(store
         .connection
@@ -171,7 +171,7 @@ fn add_key_status(app: &tauri::AppHandle, mut profile: Profile) -> Result<Profil
     Ok(profile)
 }
 
-fn key_target(app: &tauri::AppHandle, id: &str) -> String {
+pub(super) fn key_target(app: &tauri::AppHandle, id: &str) -> String {
     credentials::target(&app.config().identifier, id)
 }
 
