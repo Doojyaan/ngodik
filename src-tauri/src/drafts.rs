@@ -1,12 +1,16 @@
+mod changes;
 mod contract;
+mod qa;
+pub mod revisions;
 mod storage;
 #[cfg(test)]
 mod tests;
+mod versions;
 
 use std::{collections::HashMap, path::PathBuf, sync::Mutex, time::Duration};
 
 use reqwest::Client;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State};
 use tokio_util::sync::CancellationToken;
@@ -33,6 +37,9 @@ pub enum DraftError {
     Canceled,
     ContextTooLarge,
     ContainsKey,
+    InvalidRevision,
+    PendingReview,
+    RecoveryUnavailable,
     #[serde(untagged)]
     Provider(ProviderError),
 }
@@ -64,7 +71,7 @@ impl DraftError {
 
 type Result<T> = std::result::Result<T, DraftError>;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Stage {
     Product = 0,
@@ -83,8 +90,9 @@ pub struct Drafts {
 }
 
 impl Drafts {
-    pub fn new(root: PathBuf, store: &ProjectStore) -> Result<Self> {
+    pub fn new(root: PathBuf, store: &mut ProjectStore) -> Result<Self> {
         storage::interrupt(store, &root)?;
+        versions::initialize(store, &root)?;
         Ok(Self {
             root,
             active: Mutex::new(HashMap::new()),
@@ -97,7 +105,17 @@ impl Drafts {
 pub struct Snapshot {
     target: Option<Target>,
     current: Option<RunView>,
-    previous: Option<RunView>,
+    published: Option<versions::Published>,
+    proposal: Option<Proposal>,
+    versions: Vec<versions::Version>,
+    recovery_warning: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Proposal {
+    run_id: i64,
+    changes: Vec<changes::Change>,
 }
 
 fn lock<'a>(store: &'a State<'_, Store>) -> Result<std::sync::MutexGuard<'a, ProjectStore>> {
@@ -123,23 +141,40 @@ pub fn draft_status(
     project_id: i64,
 ) -> Result<Snapshot> {
     let store = lock(&store)?;
-    let current = storage::latest(&store, project_id, false)?
+    let latest = storage::latest(&store, project_id, false)?;
+    let pending = latest.as_ref().is_some_and(storage::is_proposal);
+    let current = latest
+        .filter(|run| run.review_decision.as_deref() != Some("dismissed"))
         .map(|run| storage::show(&store, &drafts.root, run))
         .transpose()?;
-    let previous = if current
-        .as_ref()
-        .is_some_and(|run| run.status != "completed")
-    {
-        storage::latest(&store, project_id, true)?
-            .map(|run| storage::show(&store, &drafts.root, run))
-            .transpose()?
-    } else {
-        None
-    };
+    let versions = versions::list(&store, project_id)?;
+    let mut recovery_warning = false;
+    let published = versions.first().and_then(|version| {
+        match versions::read(&store, &drafts.root, project_id, version.id) {
+            Ok(backup) => Some(versions::Published {
+                version: backup.version,
+                draft: backup.draft,
+            }),
+            Err(_) => {
+                recovery_warning = true;
+                None
+            }
+        }
+    });
+    let proposal = current.as_ref().filter(|_| pending).map(|draft| Proposal {
+        run_id: draft.id,
+        changes: published
+            .as_ref()
+            .map(|active| changes::compare(&active.draft.documents(), &draft.documents()))
+            .unwrap_or_default(),
+    });
     Ok(Snapshot {
         target: target(&store, project_id)?,
         current,
-        previous,
+        published,
+        proposal,
+        versions,
+        recovery_warning,
     })
 }
 
@@ -172,7 +207,17 @@ pub fn start_draft(
     if contains_key(&project.idea, &key) || contains_key(&target.model_id, &key) {
         return Err(DraftError::ContainsKey);
     }
-    let id = storage::create(&mut store, project_id, revision, &project.idea, &target)?;
+    storage::require_no_proposal(&store, project_id)?;
+    let head = versions::head(&store.connection, project_id)?;
+    let id = storage::create(
+        &mut store,
+        project_id,
+        revision,
+        &project.idea,
+        &target,
+        head,
+        None,
+    )?;
     spawn(app, &drafts, storage::run(&store, id)?, base, key)
 }
 
@@ -196,7 +241,13 @@ pub fn resume_draft(
         return Err(DraftError::Changed);
     }
     let (base, key) = key_for(&app, &run.target)?;
-    if contains_key(&run.idea, &key) || contains_key(&run.target.model_id, &key) {
+    if contains_key(&run.idea, &key)
+        || contains_key(&run.target.model_id, &key)
+        || run
+            .revision_note
+            .as_deref()
+            .is_some_and(|note| contains_key(note, &key))
+    {
         return Err(DraftError::ContainsKey);
     }
     storage::resume(&mut store, run_id, project_id)?;
@@ -265,7 +316,11 @@ fn spawn(
                 Ok(()) => ("completed", None),
                 Err(error) => ("failed", Some(error.code())),
             };
-            let _ = storage::finish(&mut store, run.id, status, error.as_deref());
+            if storage::finish(&mut store, run.id, status, error.as_deref()).is_ok()
+                && status == "completed"
+            {
+                let _ = versions::first(&mut store, &drafts.root, run.id);
+            }
             if let Ok(mut active) = drafts.active.lock() {
                 active.remove(&run.id);
             }
@@ -292,20 +347,124 @@ impl Worker<'_> {
     }
 
     async fn execute(&self) -> Result<()> {
+        let scope = self.run.revision_scope.as_deref();
+        let previous = if let (Some(_), Some(base)) = (scope, self.run.base_version) {
+            let store = self.store()?;
+            Some(
+                versions::read(&store, self.root, self.run.project_id, base)?
+                    .draft
+                    .documents(),
+            )
+        } else {
+            None
+        };
+        let reuse = |stage: Stage| {
+            previous.as_ref().and_then(|docs| {
+                let unchanged = match scope {
+                    Some("review") => true,
+                    Some("analyst") => matches!(stage, Stage::Product | Stage::Ux),
+                    Some("ux") => matches!(stage, Stage::Product | Stage::Analyst),
+                    Some("architect") => stage != Stage::Architect,
+                    _ => false,
+                };
+                unchanged.then(|| &docs[stage as usize])
+            })
+        };
+        let mut product_context = json!({"idea":self.run.idea});
+        if matches!(scope, Some("all" | "product")) {
+            if let Some(docs) = &previous {
+                product_context["revision"] =
+                    json!({"instruction":self.run.revision_note,"previousSpecification":docs[0]});
+            }
+        }
         let product = self
-            .stage(Stage::Product, &json!({"idea":self.run.idea}), None)
+            .stage(
+                Stage::Product,
+                &product_context,
+                None,
+                reuse(Stage::Product),
+            )
             .await?;
         let spec = contract::canonical(product.clone())?;
-        let context = json!({"projectSpecification":product});
+        let context_for = |stage: Stage, mut context: Value| {
+            let target = match stage {
+                Stage::Analyst => "analyst",
+                Stage::Ux => "ux",
+                Stage::Architect => "architect",
+                Stage::Product => "product",
+            };
+            if scope == Some(target) {
+                if let Some(docs) = &previous {
+                    context["revision"] = json!({"instruction":self.run.revision_note,"previousDocument":docs[stage as usize]});
+                }
+            }
+            context
+        };
+        let analyst_context = context_for(Stage::Analyst, json!({"projectSpecification":product}));
+        let ux_context = context_for(Stage::Ux, json!({"projectSpecification":product}));
         let (analyst, ux) = tokio::join!(
-            self.stage(Stage::Analyst, &context, Some(&spec)),
-            self.stage(Stage::Ux, &context, Some(&spec)),
+            self.stage(
+                Stage::Analyst,
+                &analyst_context,
+                Some(&spec),
+                reuse(Stage::Analyst)
+            ),
+            self.stage(Stage::Ux, &ux_context, Some(&spec), reuse(Stage::Ux)),
         );
-        let architecture =
-            json!({"projectSpecification": product, "systemAnalysis": analyst?, "uiUx": ux?});
-        self.stage(Stage::Architect, &architecture, Some(&spec))
+        let (analyst, ux) = (analyst?, ux?);
+        let architecture = context_for(
+            Stage::Architect,
+            json!({
+                "projectSpecification":product, "systemAnalysis":analyst, "uiUx":ux
+            }),
+        );
+        let architect = self
+            .stage(
+                Stage::Architect,
+                &architecture,
+                Some(&spec),
+                reuse(Stage::Architect),
+            )
             .await?;
-        Ok(())
+        self.review([product, analyst, ux, architect]).await
+    }
+
+    async fn review(&self, docs: [Value; 4]) -> Result<()> {
+        self.check_canceled()?;
+        let mut report = qa::Report::local(qa::deterministic(&docs));
+        let payload = qa::context(&docs);
+        let eligible = report.deterministic.is_empty()
+            && !value_contains_key(&payload, self.key)
+            && payload.to_string().len() <= 132 * 1024;
+        let send = {
+            let store = self.store()?;
+            if qa::saved(&store.connection, self.run.id)?.is_some() {
+                return Ok(());
+            }
+            eligible && qa::begin(&store.connection, self.run.id)?
+        };
+        report.semantic_status = qa::SemanticStatus::Unavailable;
+        if send {
+            let payload = payload.to_string();
+            let (response, _) = tokio::select! {
+                biased;
+                _ = self.cancel.cancelled() => return Err(DraftError::Canceled),
+                response = providers::endpoint::generate(
+                    self.client, self.base, self.key, &self.run.target.model_id, qa::INSTRUCTION, &payload
+                ) => response,
+            };
+            if let Ok(response) = response {
+                if !value_contains_key(&response, self.key) {
+                    if let Ok(findings) = qa::semantic(response, &docs) {
+                        report.semantic_status = qa::SemanticStatus::Complete;
+                        report.semantic = findings;
+                    }
+                }
+            }
+        }
+        let store = self.store()?;
+        self.check_canceled()?;
+        qa::save(&store.connection, self.run.id, &report)
     }
 
     async fn stage(
@@ -313,12 +472,21 @@ impl Worker<'_> {
         stage: Stage,
         context: &Value,
         spec: Option<&contract::Canonical>,
+        reuse: Option<&Value>,
     ) -> Result<Value> {
         self.check_canceled()?;
         if let Some(saved) = storage::cached(&*self.store()?, self.root, self.run, stage)? {
             return Ok(saved);
         }
-        let result = self.generate(stage, context, spec).await;
+        let result = match reuse {
+            Some(document) => {
+                if value_contains_key(document, self.key) {
+                    return Err(DraftError::ContainsKey);
+                }
+                contract::normalize(stage, document.clone(), spec)
+            }
+            None => self.generate(stage, context, spec).await,
+        };
         match &result {
             Err(_) if self.cancel.is_cancelled() => return Err(DraftError::Canceled),
             Err(error) => storage::fail_stage(&*self.store()?, self.run.id, stage, &error.code())?,
@@ -344,7 +512,10 @@ impl Worker<'_> {
         if value_contains_key(context, self.key) {
             return Err(DraftError::ContainsKey);
         }
-        let instruction = contract::instruction(stage);
+        let mut instruction = contract::instruction(stage);
+        if context.get("revision").is_some() {
+            instruction.push_str(" Apply only the requested revision within your role. Keep unrelated requirements, IDs, assumptions and document sections stable. Mark guesses rather than introducing unsupported decisions.");
+        }
         for attempt in 0..2 {
             self.check_canceled()?;
             storage::begin_attempt(&*self.store()?, self.run.id, stage)?;

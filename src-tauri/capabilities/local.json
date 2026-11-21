@@ -23,6 +23,9 @@
     "allow-draft-status",
     "allow-start-draft",
     "allow-resume-draft",
-    "allow-cancel-draft"
+    "allow-cancel-draft",
+    "allow-revise-draft",
+    "allow-decide-proposal",
+    "allow-restore-blueprint"
   ]
 }

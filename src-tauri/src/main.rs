@@ -58,10 +58,10 @@ fn main() {
         .setup(|app| {
             let directory = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&directory)?;
-            let projects = ProjectStore::open(&directory.join("ngodik.sqlite3"))
+            let mut projects = ProjectStore::open(&directory.join("ngodik.sqlite3"))
                 .map_err(|_| std::io::Error::other("Penyimpanan proyek tidak dapat dibuka"))?;
             app.manage(
-                drafts::Drafts::new(directory, &projects)
+                drafts::Drafts::new(directory, &mut projects)
                     .map_err(|_| std::io::Error::other("Checkpoint draf tidak dapat dibuka"))?,
             );
             app.manage(Mutex::new(projects));
@@ -88,6 +88,9 @@ fn main() {
             drafts::start_draft,
             drafts::resume_draft,
             drafts::cancel_draft,
+            drafts::revisions::revise_draft,
+            drafts::revisions::decide_proposal,
+            drafts::revisions::restore_blueprint,
         ])
         .run(context)
         .expect("ngodik gagal dibuka");

@@ -257,3 +257,24 @@ input::placeholder, textarea::placeholder { color: var(--quiet); }
   body { background: #131517; }
   .app-rail, .profile-popover { background: var(--paper); backdrop-filter: none; box-shadow: none; }
 }
+
+.review-panel h3 { margin: 0 0 7px; }
+.review-groups { display: grid; gap: 16px; }
+.review-groups > section + section, .review-section { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 15px; }
+.review-findings li { border-left: 2px solid #51535c; margin: 10px 0; padding-left: 12px; }
+.review-findings p { margin: 0 0 5px; }
+.review-changes details { border-top: 1px solid var(--line); padding: 8px 0; }
+.review-changes summary { cursor: pointer; font-weight: 600; }
+.change-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 8px 0; }
+.change-pair pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 5px 0; font: .8rem/1.5 var(--mono); color: var(--muted); }
+.revision-form { margin-top: 12px; }
+.revision-form select, .revision-form textarea { margin-bottom: 10px; }
+.revision-form textarea { min-height: 105px; }
+.version-panel .version-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px 0; }
+.version-row p { margin: 4px 0 0; }
+.version-row .badge { margin-left: 5px; }
+.artifact-switch button[aria-pressed="true"] { border-color: var(--amber); }
+@media (max-width: 690px) {
+  .change-pair, .version-panel .version-row { grid-template-columns: minmax(0, 1fr); }
+  .version-row button { justify-self: start; }
+}

@@ -72,18 +72,22 @@ impl ProjectStore {
         }
         match schema {
             0 | 1 => connection.execute_batch(include_str!("../migrations/002_providers.sql"))?,
-            2 | 3 => {}
+            2..=4 => {}
             _ => return Err(ProjectError::StorageUnavailable),
         }
         if schema <= 2 {
             connection.execute_batch(include_str!("../migrations/003_drafts.sql"))?;
+        }
+        if schema <= 3 {
+            connection.execute_batch(include_str!("../migrations/004_reviews_and_versions.sql"))?;
         }
         Ok(Self { connection })
     }
 
     pub fn list(&self) -> Result<Vec<ProjectSummary>> {
         let mut query = self.connection.prepare(
-            "SELECT p.id, p.title, p.updated_at, run.status,
+            "SELECT p.id, p.title, p.updated_at,
+                 CASE WHEN run.status='completed' AND run.review_decision IS NULL THEN 'pending_review' ELSE run.status END,
                  (SELECT COUNT(*) FROM draft_stages WHERE run_id=run.id AND status='completed')
              FROM projects p
              LEFT JOIN draft_runs run ON run.id=(SELECT id FROM draft_runs WHERE project_id=p.id ORDER BY id DESC LIMIT 1)

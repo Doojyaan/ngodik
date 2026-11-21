@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-type Target = { profileId: string; baseUrl: string; modelId: string };
+import { BlueprintHistory, ReviewPane, needsReview, reviewLabels, type Proposal, type Report, type Target, type Version } from "./draft-review";
 type Requirement = {
   id: string; kind: "functional" | "nonfunctional"; statement: string; acceptanceCriteria: string[]; source: string;
 };
@@ -9,6 +9,7 @@ type Finding = { text: string; source: string };
 type Specification = {
   title: string; summary: string; problem: string; audience: string; goals: string[]; inScope: string[]; outOfScope: string[];
   requirements: Requirement[]; decisions: Finding[]; assumptions: Finding[]; openQuestions: Finding[];
+  applicability: { systemAnalysis: boolean; uiUx: boolean; httpApi: boolean };
 };
 type Document = { sections: { title: string; body: string; requirementRefs: string[] }[] };
 type Step = {
@@ -18,12 +19,13 @@ type Step = {
   error: string | null;
   output: Specification | Document | null;
 };
-type Run = { id: number; ideaRevision: number; target: Target; status: Step["status"]; error: string | null; stages: Step[] };
-type Snapshot = { target: Target | null; current: Run | null; previous: Run | null };
-
-const stepLabels: Record<Step["stage"], string> = {
-  product: "Produk dan kebutuhan", analyst: "Analisis sistem", ux: "Pengalaman pengguna", architect: "Arsitektur solusi"
+type Run = { id: number; ideaRevision: number; target: Target; status: Step["status"]; error: string | null; stages: Step[]; qa: Report | null };
+type Snapshot = {
+  target: Target | null; current: Run | null; published: { version: Version; draft: Run } | null;
+  proposal: Proposal | null; versions: Version[]; recoveryWarning: boolean;
 };
+
+const stepLabels = reviewLabels;
 const filenames: Record<Step["stage"], string> = {
   product: "PROJECT_SPECIFICATION.json",
   analyst: "SYSTEM_ANALYSIS.json",
@@ -37,6 +39,9 @@ const statuses: Record<Step["status"], string> = {
 };
 const errors: Record<string, string> = {
   busy: "Proyek ini sedang menyusun draf.",
+  invalid_revision: "Periksa cakupan dan panjang instruksi revisi.",
+  pending_review: "Terapkan atau buang usulan yang masih menunggu di tab Review.",
+  recovery_unavailable: "Titik pemulihan ini tidak tersedia.",
   checkpoint_unreadable: "Hasil tahap yang tersimpan tidak dapat dibaca. Anda masih bisa membuat draf baru.",
   no_model: "Simpan satu model di panel Model proyek sebelum membuat draf.",
   missing_key: "Tambahkan API key pada profil melalui Pengaturan model.",
@@ -133,17 +138,24 @@ function ArtifactReader({ run }: { run: Run | null | undefined }) {
   </section>;
 }
 
-export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, view, openModel, openIdea, openArtifacts }: {
+export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, view, openModel, openIdea, openArtifacts, openDraft, openReview }: {
   projectId: number; hasIdea: boolean; prepare: () => Promise<number | undefined>; configurationVersion: number;
-  view: "draft" | "artifacts"; openModel: () => void; openIdea: () => void; openArtifacts: () => void;
+  view: "draft" | "artifacts" | "review" | "versions"; openModel: () => void; openIdea: () => void; openArtifacts: () => void;
+  openDraft: () => void; openReview: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [problem, setProblem] = useState("");
   const [action, setAction] = useState("");
   const current = snapshot?.current;
   const target = snapshot?.target;
+  const active = snapshot?.published;
+  const proposal = snapshot?.proposal;
+  const versions = snapshot?.versions ?? [];
+  const [artifactChoice, setArtifactChoice] = useState<number | null>(null);
   const running = current?.status === "running";
-  const canResume = Boolean(current && !running && current.status !== "completed");
+  const canResume = Boolean(current && ["failed", "canceled", "interrupted"].includes(current.status));
+  const display = active?.draft ?? current;
+  const progress = running || canResume || !active ? current : active.draft;
 
   const refresh = useCallback(async () => {
     setSnapshot(await invoke<Snapshot>("draft_status", { projectId }));
@@ -166,20 +178,64 @@ export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, 
   async function run(label: string, operation: () => Promise<void>) {
     setProblem("");
     setAction(label);
-    try { await operation(); await refresh(); }
-    catch (error) { setProblem(explain(error)); await refresh().catch(() => {}); }
+    try { await operation(); await refresh(); return true; }
+    catch (error) { setProblem(explain(error)); await refresh().catch(() => {}); return false; }
     finally { setAction(""); }
   }
 
   if (view === "artifacts") {
-    const runWithDocuments = current?.stages.some(({ output }) => Boolean(output)) ? current : snapshot?.previous;
-    return <ArtifactReader key={runWithDocuments?.id} run={runWithDocuments} />;
+    const candidateSelected = Boolean(proposal && artifactChoice === proposal.runId);
+    const artifactDraft = candidateSelected ? current : display;
+    return <>
+      {proposal && active && <div className="settings-actions artifact-switch" aria-label="Jenis artefak">
+        <button aria-pressed={!candidateSelected} onClick={() => setArtifactChoice(null)}>Draf aktif</button>
+        <button aria-pressed={candidateSelected} onClick={() => setArtifactChoice(proposal.runId)}>Usulan revisi</button>
+      </div>}
+      <ArtifactReader key={artifactDraft?.id} run={artifactDraft} />
+    </>;
+  }
+
+  if (view === "review") {
+    const report = proposal ? current?.qa : active?.draft.qa ?? current?.qa;
+    const specification = active?.draft.stages.find(({ stage }) => stage === "product")?.output;
+    const scopes: Step["stage"][] = ["product"];
+    if (specification && "applicability" in specification) {
+      if (specification.applicability.systemAnalysis) scopes.push("analyst");
+      if (specification.applicability.uiUx) scopes.push("ux");
+    }
+    scopes.push("architect");
+    return <ReviewPane report={report} proposal={proposal} target={target} hasVersion={Boolean(active)}
+      scopes={scopes} action={action} running={running} problem={problem} openArtifacts={openArtifacts}
+      openDraft={openDraft} openModel={openModel}
+      revise={async (scope, instruction) => {
+        if (!target || !active) return false;
+        const ok = await run("Menyiapkan revisi…", () => invoke("revise_draft", {
+          projectId, versionId: active.version.id, scope, instruction, profileId: target.profileId, modelId: target.modelId,
+        }));
+        if (ok) openDraft();
+        return ok;
+      }}
+      decide={(apply) => {
+        if (proposal) void run("Menyimpan keputusan…", () => invoke("decide_proposal", { projectId, runId: proposal.runId, apply }));
+      }} />;
+  }
+
+  if (view === "versions") {
+    return <BlueprintHistory versions={versions} warning={Boolean(snapshot?.recoveryWarning)} running={running}
+      pending={Boolean(proposal)} action={action} problem={problem}
+      restore={(versionId) => {
+        const expectedHead = versions[0]?.id;
+        if (expectedHead) void run("Memulihkan versi…", () => invoke("restore_blueprint", { projectId, versionId, expectedHead }));
+      }} />;
   }
 
   return <section className="editor draft-panel" aria-labelledby="draft-title">
     <header className="section-heading heading-row">
       <h2 id="draft-title">Draf blueprint</h2>
-      <span className="badge" data-status={current?.status}>{current ? statuses[current.status] : "Belum ada draf"}</span>
+      <span className="badge" data-status={proposal || needsReview(active?.draft.qa) ? "interrupted" : progress?.status}>
+        {proposal ? "Usulan menunggu persetujuan" : (running || canResume) && progress ? statuses[progress.status] : needsReview(active?.draft.qa)
+          ? "Perlu ditinjau" : progress ? statuses[progress.status] : "Belum ada draf"}
+      </span>
     </header>
     {target ? <div className="draft-destination">
       <p><strong>{target.modelId}</strong> <span className="profile-url">{target.baseUrl}</span></p>
@@ -191,38 +247,38 @@ export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, 
     <div className="settings-actions">
       {!target && <button onClick={openModel}>Pilih model</button>}
       {!hasIdea && <button onClick={openIdea}>Tulis ide</button>}
-      {current?.stages.some(({ output }) => Boolean(output)) && <button onClick={openArtifacts}>Buka artefak</button>}
+      {display?.stages.some(({ output }) => Boolean(output)) && <button onClick={openArtifacts}>Buka artefak</button>}
+      {(proposal || active?.draft.qa) && <button className={proposal ? "primary" : undefined} onClick={openReview}>
+        {proposal ? "Bandingkan usulan" : "Buka review"}
+      </button>}
       {running && current ? <button disabled={Boolean(action)} onClick={() => void run("Membatalkan…", () =>
         invoke("cancel_draft", { projectId, runId: current.id }))}>Batalkan proses</button> : <>
         {canResume && current && <button className="primary" disabled={Boolean(action)} onClick={() => void run("Melanjutkan…", () =>
           invoke("resume_draft", { projectId, runId: current.id }))}>{current.status === "failed" ? "Coba lagi" : "Lanjutkan draf"}</button>}
-        <button className={canResume ? undefined : "primary"} disabled={Boolean(action) || !target || !hasIdea}
+        {!proposal && <button className={canResume ? undefined : "primary"} disabled={Boolean(action) || !target || !hasIdea}
           onClick={() => void run("Menyiapkan draf…", async () => {
             if (!target) return;
             const revision = await prepare();
             if (revision === undefined) return;
             await invoke("start_draft", { projectId, revision, profileId: target.profileId, modelId: target.modelId });
-          })}>{current ? "Buat draf baru" : "Buat draf"}</button>
+          })}>{current || active ? "Buat draf baru" : "Buat draf"}</button>}
       </>}
     </div>
     <p className={action ? "draft-action" : "visually-hidden"} role="status">{action || (current ? statuses[current.status] : "")}</p>
     {problem && <p className="error" role="alert">{problem}</p>}
-    {current && <div className="draft-layout">
+    {progress && <div className="draft-layout">
       <ol className="draft-stages" aria-label="Tahap penyusunan">
-        {current.stages.map(({ stage, status, error, attempts }) => <li key={stage}>
+        {progress.stages.map(({ stage, status, error, attempts }) => <li key={stage}>
           <strong><span className="step-dot" data-status={status} aria-hidden="true" />{stepLabels[stage]}</strong>
           <span>{statuses[status]}{attempts > 1 ? ` · ${attempts} percobaan` : ""}</span>
           {error && <small className="error">{explain(error)}</small>}
         </li>)}
       </ol>
       <div className="draft-reading">
-        {current.error && <p className="error">{explain(current.error)}</p>}
-        <Results run={current} />
+        {current?.error && <p className="error">{explain(current.error)}</p>}
+        {running && current?.stages.every(({ status }) => status === "completed") && <p role="status">Meninjau draf…</p>}
+        {display && <Results run={display} />}
       </div>
     </div>}
-    {snapshot?.previous && <details className="draft-previous">
-      <summary>Draf selesai sebelumnya</summary>
-      <Results run={snapshot.previous} />
-    </details>}
   </section>;
 }

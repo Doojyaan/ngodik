@@ -12,10 +12,12 @@ export type Project = { id: number; title: string; idea: string; revision: numbe
 const date = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "medium" });
 const limit = 16 * 1024;
 
-type Panel = "draft" | "artifacts" | "idea" | "model" | "history";
+type Panel = "draft" | "artifacts" | "review" | "versions" | "idea" | "model" | "history";
 const panels: { id: Panel; label: string }[] = [
   { id: "draft", label: "Draf blueprint" },
   { id: "artifacts", label: "Artefak" },
+  { id: "review", label: "Review" },
+  { id: "versions", label: "Versi blueprint" },
   { id: "idea", label: "Ide proyek" },
   { id: "model", label: "Model proyek" },
   { id: "history", label: "Riwayat simpan" },
@@ -73,11 +75,15 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
 
   useEffect(() => {
     saveBeforeLeaving.current = save;
-    return () => { if (saveBeforeLeaving.current === save) saveBeforeLeaving.current = null; };
+    const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
+
+  return () => { if (saveBeforeLeaving.current === save) saveBeforeLeaving.current = null; };
   }, [save, saveBeforeLeaving]);
   useEffect(() => {
     const timer = window.setTimeout(() => void save(), 500);
-    return () => window.clearTimeout(timer);
+    const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
+
+  return () => window.clearTimeout(timer);
   }, [idea, save]);
 
   useEffect(() => {
@@ -89,8 +95,12 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
     void listener.catch(() => {
       setError("Penyimpanan saat menutup jendela tidak tersedia. Simpan sebelum menutup.");
     });
-    return () => { void listener.then((unlisten) => unlisten()).catch(() => undefined); };
+    const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
+
+  return () => { void listener.then((unlisten) => unlisten()).catch(() => undefined); };
   }, [save]);
+
+  const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
 
   return (
     <main className="workspace project-workspace">
@@ -105,10 +115,11 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
             onClick={() => setPanel(id)}>{label}</button>)}
         </nav>
         <div className="project-detail" ref={panelSurface}>
-          <div hidden={panel !== "draft" && panel !== "artifacts"}>
+          <div hidden={panel !== draftView}>
             <DraftPanel projectId={project.id} hasIdea={Boolean(idea.trim())} configurationVersion={configurationVersion}
-              view={panel === "artifacts" ? "artifacts" : "draft"} openModel={() => setPanel("model")}
+              view={draftView} openModel={() => setPanel("model")}
               openIdea={() => setPanel("idea")} openArtifacts={() => setPanel("artifacts")}
+              openDraft={() => setPanel("draft")} openReview={() => setPanel("review")}
               prepare={async () => await save() ? current.current.revision : undefined} />
           </div>
           <section className="editor" aria-labelledby="idea-label" hidden={panel !== "idea"}>

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{DraftError, Result, Stage};
+use super::{DraftError, Result, Stage, qa};
 use crate::projects::ProjectStore;
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -28,9 +28,13 @@ pub struct Run {
     pub target: Target,
     pub status: String,
     pub error: Option<String>,
+    pub base_version: Option<i64>,
+    pub revision_scope: Option<String>,
+    pub revision_note: Option<String>,
+    pub review_decision: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StageView {
     pub stage: Stage,
@@ -40,7 +44,7 @@ pub struct StageView {
     pub output: Option<Value>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunView {
     pub id: i64,
@@ -49,6 +53,18 @@ pub struct RunView {
     pub status: String,
     pub error: Option<String>,
     pub stages: Vec<StageView>,
+    pub qa: Option<qa::Report>,
+}
+
+impl RunView {
+    pub fn documents(&self) -> [Value; 4] {
+        std::array::from_fn(|index| {
+            self.stages
+                .get(index)
+                .and_then(|stage| stage.output.clone())
+                .unwrap_or(Value::Null)
+        })
+    }
 }
 
 pub fn interrupt(store: &ProjectStore, root: &Path) -> Result<()> {
@@ -100,6 +116,8 @@ pub fn create(
     revision: i64,
     idea: &str,
     target: &Target,
+    base_version: Option<i64>,
+    revision_info: Option<(&str, &str)>,
 ) -> Result<i64> {
     let transaction = store.connection.transaction()?;
     if is_running(&transaction, project_id)? {
@@ -107,8 +125,8 @@ pub fn create(
     }
     let settings = serde_json::to_string(target).map_err(|_| DraftError::StorageUnavailable)?;
     transaction.execute(
-        "INSERT INTO draft_runs (project_id,idea_revision,idea,target,status) VALUES (?1,?2,?3,?4,'running')",
-        params![project_id,revision,idea,settings],
+        "INSERT INTO draft_runs (project_id,idea_revision,idea,target,status,base_version,revision_scope,revision_note) VALUES (?1,?2,?3,?4,'running',?5,?6,?7)",
+        params![project_id,revision,idea,settings,base_version,revision_info.map(|it| it.0),revision_info.map(|it| it.1)],
     )?;
     let id = transaction.last_insert_rowid();
     for stage in Stage::ALL {
@@ -141,7 +159,7 @@ pub fn resume(store: &mut ProjectStore, id: i64, project_id: i64) -> Result<()> 
     Ok(())
 }
 
-fn is_running(connection: &Connection, project_id: i64) -> Result<bool> {
+pub fn is_running(connection: &Connection, project_id: i64) -> Result<bool> {
     Ok(connection.query_row(
         "SELECT EXISTS (SELECT 1 FROM draft_runs WHERE project_id=?1 AND status='running')",
         [project_id],
@@ -158,10 +176,10 @@ pub fn latest(store: &ProjectStore, project_id: i64, completed: bool) -> Result<
 }
 
 pub fn run(store: &ProjectStore, id: i64) -> Result<Run> {
-    let (project_id, idea_revision, idea, settings, status, error) = store
+    let (project_id, idea_revision, idea, settings, status, error, base_version, revision_scope, revision_note, review_decision) = store
         .connection
         .query_row(
-            "SELECT project_id,idea_revision,idea,target,status,error FROM draft_runs WHERE id=?1",
+            "SELECT project_id,idea_revision,idea,target,status,error,base_version,revision_scope,revision_note,review_decision FROM draft_runs WHERE id=?1",
             [id],
             |row| {
                 Ok((
@@ -171,6 +189,10 @@ pub fn run(store: &ProjectStore, id: i64) -> Result<Run> {
                     row.get::<_, String>(3)?,
                     row.get(4)?,
                     row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
                 ))
             },
         )
@@ -185,6 +207,10 @@ pub fn run(store: &ProjectStore, id: i64) -> Result<Run> {
         target,
         status,
         error,
+        base_version,
+        revision_scope,
+        revision_note,
+        review_decision,
     })
 }
 
@@ -225,6 +251,7 @@ pub fn show(store: &ProjectStore, root: &Path, run: Run) -> Result<RunView> {
         status: run.status,
         error: run.error,
         stages,
+        qa: qa::saved(&store.connection, run.id)?,
     })
 }
 
@@ -259,6 +286,33 @@ pub fn begin_attempt(store: &ProjectStore, run: i64, stage: Stage) -> Result<()>
     Ok(())
 }
 
+fn write_json(path: &Path, id: Uuid, output: &impl Serialize) -> Result<PathBuf> {
+    let bytes = serde_json::to_vec(output).map_err(|_| DraftError::StorageUnavailable)?;
+    write_blob(path, id, &bytes)
+}
+
+pub fn write_blob(path: &Path, id: Uuid, bytes: &[u8]) -> Result<PathBuf> {
+    fs::create_dir_all(path)?;
+    let temporary = path.join(format!("{id}.tmp"));
+    let destination = path.join(format!("{id}.json"));
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(bytes)?;
+        file.flush()?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, &destination)?;
+        Ok(destination)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
+}
+
 pub fn checkpoint(
     store: &ProjectStore,
     root: &Path,
@@ -266,34 +320,21 @@ pub fn checkpoint(
     stage: Stage,
     output: &Value,
 ) -> Result<()> {
-    let path = directory(root, run);
-    fs::create_dir_all(&path)?;
-    let artifact = Uuid::new_v4();
-    let temporary = path.join(format!("{artifact}.tmp"));
-    let destination = path.join(format!("{artifact}.json"));
-    let result =
-        (|| {
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)?;
-            serde_json::to_writer(&mut file, output).map_err(|_| DraftError::StorageUnavailable)?;
-            file.flush()?;
-            file.sync_all()?;
-            drop(file);
-            fs::rename(&temporary, &destination)?;
-            if store.connection.execute(
-            "UPDATE draft_stages SET status='completed', artifact=?3 WHERE run_id=?1 AND stage=?2
-             AND EXISTS(SELECT 1 FROM draft_runs WHERE id=?1 AND status='running')",
-            params![run.id,stage as i64,artifact.to_string()],
-        )? != 1 { return Err(DraftError::Canceled); }
-            Ok(())
-        })();
-    if result.is_err() {
-        let _ = fs::remove_file(temporary);
-        let _ = fs::remove_file(destination);
+    let id = Uuid::new_v4();
+    let path = write_json(&directory(root, run), id, output)?;
+    let result = store.connection.execute(
+        "UPDATE draft_stages SET status='completed', artifact=?3 WHERE run_id=?1 AND stage=?2
+         AND EXISTS(SELECT 1 FROM draft_runs WHERE id=?1 AND status='running')",
+        params![run.id, stage as i64, id.to_string()],
+    );
+    if matches!(result, Ok(1)) {
+        return Ok(());
     }
-    result
+    let _ = fs::remove_file(path);
+    match result {
+        Ok(_) => Err(DraftError::Canceled),
+        Err(error) => Err(error.into()),
+    }
 }
 
 pub fn fail_stage(store: &ProjectStore, run: i64, stage: Stage, error: &str) -> Result<()> {
@@ -317,5 +358,19 @@ pub fn finish(store: &mut ProjectStore, run: i64, status: &str, error: Option<&s
         )?;
     }
     transaction.commit()?;
+    Ok(())
+}
+
+pub fn is_proposal(run: &Run) -> bool {
+    run.status == "completed" && run.review_decision.is_none()
+}
+
+pub fn require_no_proposal(store: &ProjectStore, project_id: i64) -> Result<()> {
+    if latest(store, project_id, false)?
+        .as_ref()
+        .is_some_and(is_proposal)
+    {
+        return Err(DraftError::PendingReview);
+    }
     Ok(())
 }

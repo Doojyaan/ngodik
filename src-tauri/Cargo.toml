@@ -19,3 +19,5 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graph
 tokio = { version = "1", features = ["macros", "time"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 httpdate = "1"
+jsonschema = { version = "0.61.2", default-features = false }
+sha2 = "0.11"

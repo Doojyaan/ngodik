@@ -11,7 +11,7 @@ type Page = "projects" | "new" | "settings" | "workspace";
 type ProjectSummary = { id: number; title: string; updatedAt: number; draftStatus: string | null; completedStages: number };
 const dates = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" });
 const projectStatuses: Record<string, string> = {
-  completed: "Draf selesai", running: "Menyusun draf", failed: "Perlu dicoba lagi", canceled: "Dibatalkan", interrupted: "Dapat dilanjutkan",
+  pending_review: "Menunggu tinjauan", completed: "Draf selesai", running: "Menyusun draf", failed: "Perlu dicoba lagi", canceled: "Dibatalkan", interrupted: "Dapat dilanjutkan",
 };
 
 function App() {
