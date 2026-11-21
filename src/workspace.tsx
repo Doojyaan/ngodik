@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import { ProjectModel } from "./model-settings";
+
 type Checkpoint = { revision: number; savedAt: number };
 export type Project = { id: number; title: string; idea: string; revision: number; history: Checkpoint[] };
 
@@ -109,6 +111,7 @@ export function Workspace({ initial, back }: { initial: Project; back: () => voi
           ))}</ol>
         </aside>
       </div>
+      <ProjectModel projectId={project.id} />
     </main>
   );
 }

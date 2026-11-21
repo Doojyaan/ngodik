@@ -2,12 +2,14 @@ import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { Workspace, type Project } from "./workspace";
+import { ModelSettings } from "./model-settings";
 import "./styles.css";
 
 type ProjectSummary = { id: number; title: string; updatedAt: number };
 const dates = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" });
 
 function App() {
+  const [settings, setSettings] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [project, setProject] = useState<Project>();
   const [title, setTitle] = useState("");
@@ -50,8 +52,8 @@ function App() {
 
   return (
     <>
-      <header className="masthead"><span className="brand-mark" aria-hidden="true">▤</span> ngodik</header>
-      {project ? <Workspace key={project.id} initial={project} back={() => {
+      <header className="masthead"><span className="brand-mark" aria-hidden="true">▤</span> ngodik {!project && !settings && <button className="settings-link" onClick={() => setSettings(true)}>Pengaturan model</button>}</header>
+      {settings ? <ModelSettings back={() => setSettings(false)} /> : project ? <Workspace key={project.id} initial={project} back={() => {
         setProject(undefined);
         void refresh();
       }} /> : <main className="home">

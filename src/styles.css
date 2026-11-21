@@ -54,3 +54,15 @@ time { font-size: .875rem; font-weight: 400; }
 @media (max-width: 460px) {
   .create-row { align-items: stretch; flex-direction: column; }
 }
+.settings-link { margin-left: auto; color: var(--ink); font-size: .95rem; }
+.settings label { margin: 0 0 5px; font-size: 1rem; }
+.settings input, .settings select { margin-bottom: 13px; }
+.settings-form { margin: 0; }
+.settings select { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: white; border: 1px solid #879bb1; border-radius: 5px; }
+.settings-section { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 15px; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.profile-list { margin-top: 12px; }
+.profile-list [aria-pressed="true"] { border-color: var(--accent); background: #e3eefc; }
+.profile-url { overflow-wrap: anywhere; font-size: .95rem; color: var(--muted); }
+.project-model { margin-top: 24px; max-width: 650px; }
+.danger { color: #842923; }

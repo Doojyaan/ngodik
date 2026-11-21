@@ -13,3 +13,12 @@ Pasang Node.js 24, npm, Rust MSVC, Microsoft C++ Build Tools dengan Windows SDK,
 - `npm.cmd run tauri build -- --no-bundle` membangun executable Windows.
 
 Data disimpan di `%LOCALAPPDATA%\id.ngodik.desktop\ngodik.sqlite3`. Penyimpanan ide mencatat maksimal 10 checkpoint per proyek. Checkpoint ini berada di DB aktif. Fitur pemulihan versi blueprint dan snapshot pemulihan dijadwalkan pada Tahap 4.
+
+## Menghubungkan model
+
+1. Buka **Pengaturan model** dari halaman proyek. Buat profil dengan nama dan URL dasar API yang kompatibel dengan OpenAI Chat Completions, misalnya dengan akhiran /v1 jika provider memerlukannya.
+2. Pilih **Masukkan API key**. Tempel key pada kolom Password di dialog Windows. Key disimpan di Windows Credential Manager.
+3. Muat daftar model atau ketik ID model secara manual. **Uji koneksi** mengirim pesan pendek, tanpa ide proyek.
+4. Buka proyek, lalu pilih profil dan satu ID model di panel **Model proyek**.
+
+Endpoint remote harus memakai HTTPS. Untuk API di perangkat sendiri, HTTP dapat dipakai pada localhost atau IP loopback. Buat profil baru saat mengganti alamat API agar key lama tetap terkait dengan tujuan semula. Menghapus profil juga melepas pilihan model pada proyek yang memakainya.

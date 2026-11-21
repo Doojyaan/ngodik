@@ -55,7 +55,7 @@ pub struct Project {
 }
 
 pub struct ProjectStore {
-    connection: Connection,
+    pub(super) connection: Connection,
 }
 
 impl ProjectStore {
@@ -65,9 +65,12 @@ impl ProjectStore {
         connection.pragma_update(None, "foreign_keys", "ON")?;
         connection.pragma_update(None, "journal_mode", "WAL")?;
         let schema: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if schema == 0 {
+            connection.execute_batch(include_str!("../migrations/001_projects.sql"))?;
+        }
         match schema {
-            0 => connection.execute_batch(include_str!("../migrations/001_projects.sql"))?,
-            1 => {}
+            0 | 1 => connection.execute_batch(include_str!("../migrations/002_providers.sql"))?,
+            2 => {}
             _ => return Err(ProjectError::StorageUnavailable),
         }
         Ok(Self { connection })

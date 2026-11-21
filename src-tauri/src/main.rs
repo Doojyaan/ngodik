@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod projects;
+mod providers;
 
 use std::sync::{Mutex, MutexGuard};
 
@@ -49,13 +50,25 @@ fn main() {
             let projects = ProjectStore::open(&directory.join("ngodik.sqlite3"))
                 .map_err(|_| std::io::Error::other("Penyimpanan proyek tidak dapat dibuka"))?;
             app.manage(Mutex::new(projects));
+            app.manage(
+                providers::http_client()
+                    .map_err(|_| std::io::Error::other("Koneksi model tidak dapat disiapkan"))?,
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             list_projects,
             create_project,
             open_project,
-            save_idea
+            save_idea,
+            providers::list_profiles,
+            providers::save_profile,
+            providers::set_profile_key,
+            providers::delete_profile,
+            providers::sync_models,
+            providers::test_connection,
+            providers::project_model,
+            providers::set_project_model,
         ])
         .run(tauri::generate_context!())
         .expect("ngodik gagal dibuka");

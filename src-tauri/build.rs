@@ -5,6 +5,14 @@ fn main() {
             "create_project",
             "open_project",
             "save_idea",
+            "list_profiles",
+            "save_profile",
+            "set_profile_key",
+            "delete_profile",
+            "sync_models",
+            "test_connection",
+            "project_model",
+            "set_project_model",
         ]),
     ))
     .expect("failed to build Tauri configuration");

@@ -1,9 +1,24 @@
 {
   "identifier": "local-projects",
   "description": "Project commands for the main local window.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
-    "core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-destroy",
-    "allow-list-projects", "allow-create-project", "allow-open-project", "allow-save-idea"
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-destroy",
+    "allow-list-projects",
+    "allow-create-project",
+    "allow-open-project",
+    "allow-save-idea",
+    "allow-list-profiles",
+    "allow-save-profile",
+    "allow-set-profile-key",
+    "allow-delete-profile",
+    "allow-sync-models",
+    "allow-test-connection",
+    "allow-project-model",
+    "allow-set-project-model"
   ]
 }
