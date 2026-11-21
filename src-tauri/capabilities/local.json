@@ -11,6 +11,8 @@
     "allow-list-projects",
     "allow-create-project",
     "allow-open-project",
+    "allow-rename-project",
+    "allow-delete-project",
     "allow-save-idea",
     "allow-list-profiles",
     "allow-save-profile",

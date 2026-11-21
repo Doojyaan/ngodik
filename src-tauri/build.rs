@@ -4,6 +4,8 @@ fn main() {
             "list_projects",
             "create_project",
             "open_project",
+            "rename_project",
+            "delete_project",
             "save_idea",
             "list_profiles",
             "save_profile",

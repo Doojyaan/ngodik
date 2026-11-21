@@ -5,6 +5,7 @@ import { Workspace, type Project } from "./workspace";
 import { ModelSettings } from "./model-settings";
 import { stages } from "./draft-panel";
 import { useButtonHoverMotion, useNavigationMotion } from "./navigation-motion";
+import { ProjectActions, ProjectActionDialog, type ProjectAction } from "./project-actions";
 import "./styles.css";
 
 type Page = "projects" | "new" | "settings" | "workspace";
@@ -23,6 +24,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [projectAction, setProjectAction] = useState<ProjectAction>();
   const saveBeforeLeaving = useRef<(() => Promise<boolean>) | null>(null);
   const pageSurface = useRef<HTMLDivElement>(null);
   useNavigationMotion(pageSurface, page, "main h1");
@@ -175,7 +177,7 @@ function App() {
               <span>Nama proyek</span><span>Status draf</span><span>Progres</span><span>Terakhir disunting</span>
             </div>
             <ul>
-              {projects.map(({ id, title, updatedAt, draftStatus, completedStages }) => <li key={id}>
+              {projects.map(({ id, title, updatedAt, draftStatus, completedStages }) => <li key={id} className="project-entry">
                 <button className="project-row" disabled={busy} onClick={() => void enter(id)}>
                   <span className="project-name"><span className="file-mark" aria-hidden="true" /><strong>{title}</strong></span>
                   <span className="project-state"><span className="step-dot" data-status={draftStatus} aria-hidden="true" />
@@ -183,11 +185,14 @@ function App() {
                   <span className="project-count">{completedStages} / {stages.length} tahap</span>
                   <time dateTime={new Date(updatedAt).toISOString()}>{dates.format(updatedAt)}</time>
                 </button>
+                <ProjectActions id={id} title={title} disabled={busy} onChoose={setProjectAction} />
               </li>)}
             </ul>
           </section>}
         </main>}
       </div>
+      {projectAction && <ProjectActionDialog action={projectAction} onSaved={refresh}
+        onClose={() => setProjectAction(undefined)} />}
     </>
   );
 }

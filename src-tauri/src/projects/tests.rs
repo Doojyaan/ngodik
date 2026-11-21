@@ -54,3 +54,62 @@ fn failed_or_stale_write_preserves_current_version_and_history_is_bounded() {
     assert_eq!(restored.revision, project.revision);
     assert_eq!(restored.history.len(), 10);
 }
+
+#[test]
+fn rename_and_delete_preserve_other_projects_and_reserve_deleted_ids() {
+    let root = tempfile::tempdir().unwrap();
+    let database = root.path().join("projects.sqlite3");
+    let mut store = ProjectStore::open(&database).unwrap();
+    let kept = store.create("Tetap ada", "Ide kedua").unwrap();
+    let project = store.create("Nama awal", "Ide awal").unwrap();
+    let project = store
+        .save(project.id, project.revision, "Ide tersimpan")
+        .unwrap();
+    assert!(matches!(
+        store.rename(project.id, "  "),
+        Err(ProjectError::InvalidTitle)
+    ));
+    store.rename(project.id, " Nama baru ").unwrap();
+    let renamed = store.get(project.id).unwrap();
+    assert_eq!(renamed.title, "Nama baru");
+    assert_eq!(renamed.revision, project.revision);
+    assert_eq!(renamed.history.len(), 2);
+
+    let connection = &store.connection;
+    connection.execute(
+        "INSERT INTO draft_runs(id,project_id,idea_revision,idea,target,status) VALUES (10,?1,0,'','','running')",
+        [project.id],
+    ).unwrap();
+    assert!(matches!(
+        store.delete(project.id),
+        Err(ProjectError::DraftRunning)
+    ));
+    assert!(store.get(project.id).is_ok());
+    store
+        .connection
+        .execute("UPDATE draft_runs SET status='completed'", [])
+        .unwrap();
+    store.connection.execute(
+        "INSERT INTO blueprint_versions(id,project_id,run_id,number,parent_id,restored_from,created_at,summary)
+         VALUES (20,?1,10,1,NULL,NULL,0,''),(21,?1,10,2,20,20,0,'')",
+        [project.id],
+    ).unwrap();
+    let directory = root
+        .path()
+        .join("projects")
+        .join(project.id.to_string())
+        .join("drafts");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(directory.join("checkpoint.json"), "{}").unwrap();
+    store.delete(project.id).unwrap();
+    assert!(matches!(store.get(project.id), Err(ProjectError::NotFound)));
+    assert_eq!(store.get(kept.id).unwrap().idea, "Ide kedua");
+
+    drop(store);
+    let mut store = ProjectStore::open(&database).unwrap();
+    assert_eq!(store.list().unwrap().len(), 1);
+    store.clean_deleted_projects(root.path()).unwrap();
+    assert!(!directory.exists());
+    let next = store.create("Proyek baru", "").unwrap();
+    assert!(next.id > project.id);
+}

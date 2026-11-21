@@ -18,6 +18,7 @@ pub enum ProjectError {
     IdeaTooLong,
     NotFound,
     ChangedElsewhere,
+    DraftRunning,
     StorageUnavailable,
 }
 
@@ -72,7 +73,7 @@ impl ProjectStore {
         }
         match schema {
             0 | 1 => connection.execute_batch(include_str!("../migrations/002_providers.sql"))?,
-            2..=4 => {}
+            2..=5 => {}
             _ => return Err(ProjectError::StorageUnavailable),
         }
         if schema <= 2 {
@@ -80,6 +81,9 @@ impl ProjectStore {
         }
         if schema <= 3 {
             connection.execute_batch(include_str!("../migrations/004_reviews_and_versions.sql"))?;
+        }
+        if schema <= 4 {
+            connection.execute_batch(include_str!("../migrations/005_project_removal.sql"))?;
         }
         Ok(Self { connection })
     }
@@ -106,21 +110,22 @@ impl ProjectStore {
     }
 
     pub fn create(&mut self, title: &str, idea: &str) -> Result<Project> {
-        let title = title.trim();
-        if title.is_empty() || title.chars().count() > 100 {
-            return Err(ProjectError::InvalidTitle);
-        }
+        let title = valid_title(title)?;
         if idea.len() > MAX_IDEA_BYTES {
             return Err(ProjectError::IdeaTooLong);
         }
 
         let timestamp = now();
         let transaction = self.connection.transaction()?;
-        transaction.execute(
-            "INSERT INTO projects (title, idea, updated_at) VALUES (?1, ?2, ?3)",
-            params![title, idea, timestamp],
+        let id: i64 = transaction.query_row(
+            "UPDATE project_id_sequence SET last_id=last_id+1 RETURNING last_id",
+            [],
+            |row| row.get(0),
         )?;
-        let id = transaction.last_insert_rowid();
+        transaction.execute(
+            "INSERT INTO projects (id, title, idea, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![id, title, idea, timestamp],
+        )?;
         transaction.execute(
             "INSERT INTO idea_checkpoints VALUES (?1, 0, ?2, ?3)",
             params![id, idea, timestamp],
@@ -128,6 +133,70 @@ impl ProjectStore {
         let project = Self::read(&transaction, id)?;
         transaction.commit()?;
         Ok(project)
+    }
+
+    pub fn rename(&self, id: i64, title: &str) -> Result<()> {
+        let title = valid_title(title)?;
+        let changed = self.connection.execute(
+            "UPDATE projects SET title=?2, updated_at=?3 WHERE id=?1",
+            params![id, title, now()],
+        )?;
+        if changed == 0 {
+            return Err(ProjectError::NotFound);
+        }
+        Ok(())
+    }
+
+    pub fn delete(&mut self, id: i64) -> Result<()> {
+        let transaction = self.connection.transaction()?;
+        let running = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM draft_runs WHERE project_id=?1 AND status='running')",
+            [id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if running {
+            return Err(ProjectError::DraftRunning);
+        }
+        transaction.execute("DELETE FROM blueprint_versions WHERE project_id=?1", [id])?;
+        transaction.execute("DELETE FROM idea_checkpoints WHERE project_id=?1", [id])?;
+        if transaction.execute("DELETE FROM projects WHERE id=?1", [id])? == 0 {
+            return Err(ProjectError::NotFound);
+        }
+        transaction.execute("INSERT INTO pending_project_cleanup VALUES (?1)", [id])?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn clean_deleted_projects(&self, root: &Path) -> Result<()> {
+        let mut query = self
+            .connection
+            .prepare("SELECT project_id FROM pending_project_cleanup")?;
+        let ids = query
+            .query_map([], |row| row.get::<_, i64>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let parent = root
+            .canonicalize()
+            .map_err(|_| ProjectError::StorageUnavailable)?
+            .join("projects");
+        for id in ids {
+            let path = parent.join(id.to_string());
+            // Resolve the final target before touching a directory.
+            let result = path.canonicalize().and_then(|resolved| {
+                if resolved != path {
+                    return Err(std::io::Error::other("Project directory moved"));
+                }
+                std::fs::remove_dir_all(resolved)
+            });
+            if result.is_ok()
+                || result.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            {
+                self.connection.execute(
+                    "DELETE FROM pending_project_cleanup WHERE project_id=?1",
+                    [id],
+                )?;
+            }
+        }
+        Ok(())
     }
 
     pub fn get(&self, id: i64) -> Result<Project> {
@@ -200,6 +269,14 @@ impl ProjectStore {
         project.history = history.collect::<rusqlite::Result<_>>()?;
         Ok(project)
     }
+}
+
+fn valid_title(title: &str) -> Result<&str> {
+    let title = title.trim();
+    if title.is_empty() || title.chars().count() > 100 {
+        return Err(ProjectError::InvalidTitle);
+    }
+    Ok(title)
 }
 
 fn now() -> i64 {

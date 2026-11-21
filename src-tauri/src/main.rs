@@ -38,6 +38,27 @@ fn open_project(state: State<'_, Store>, id: i64) -> Result<Project, ProjectErro
 }
 
 #[tauri::command]
+fn rename_project(state: State<'_, Store>, id: i64, title: String) -> Result<(), ProjectError> {
+    store(&state)?.rename(id, &title)
+}
+
+#[tauri::command]
+fn delete_project(
+    app: tauri::AppHandle,
+    state: State<'_, Store>,
+    id: i64,
+) -> Result<(), ProjectError> {
+    let root = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|_| ProjectError::StorageUnavailable)?;
+    let mut store = store(&state)?;
+    store.delete(id)?;
+    let _ = store.clean_deleted_projects(&root);
+    Ok(())
+}
+
+#[tauri::command]
 fn save_idea(
     state: State<'_, Store>,
     id: i64,
@@ -62,6 +83,7 @@ fn main() {
             std::fs::create_dir_all(&directory)?;
             let mut projects = ProjectStore::open(&directory.join("ngodik.sqlite3"))
                 .map_err(|_| std::io::Error::other("Penyimpanan proyek tidak dapat dibuka"))?;
+            let _ = projects.clean_deleted_projects(&directory);
             app.manage(
                 drafts::Drafts::new(directory, &mut projects)
                     .map_err(|_| std::io::Error::other("Checkpoint draf tidak dapat dibuka"))?,
@@ -77,6 +99,8 @@ fn main() {
             list_projects,
             create_project,
             open_project,
+            rename_project,
+            delete_project,
             save_idea,
             providers::list_profiles,
             providers::save_profile,
