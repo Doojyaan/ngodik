@@ -4,8 +4,8 @@ use super::*;
 fn saves_reopens_and_keeps_projects_separate() {
     let path = std::env::temp_dir().join(format!("ngodik-test-{}.sqlite3", std::process::id()));
     let mut store = ProjectStore::open(&path).unwrap();
-    let first = store.create(" Inventaris ").unwrap();
-    let second = store.create("Reservasi").unwrap();
+    let first = store.create(" Inventaris ", "").unwrap();
+    let second = store.create("Reservasi", "Jadwalkan pemesanan.").unwrap();
     store
         .save(first.id, first.revision, "Catat stok 📦")
         .unwrap();
@@ -16,7 +16,7 @@ fn saves_reopens_and_keeps_projects_separate() {
     assert_eq!(project.title, "Inventaris");
     assert_eq!(project.idea, "Catat stok 📦");
     assert_eq!(project.history.len(), 2);
-    assert!(store.get(second.id).unwrap().idea.is_empty());
+    assert_eq!(store.get(second.id).unwrap().idea, "Jadwalkan pemesanan.");
     drop(store);
     std::fs::remove_file(path).unwrap();
 }
@@ -24,8 +24,8 @@ fn saves_reopens_and_keeps_projects_separate() {
 #[test]
 fn failed_or_stale_write_preserves_current_version_and_history_is_bounded() {
     let mut store = ProjectStore::open(std::path::Path::new(":memory:")).unwrap();
-    assert!(store.create("  ").is_err());
-    let mut project = store.create("Uji").unwrap();
+    assert!(store.create("  ", "").is_err());
+    let mut project = store.create("Uji", "").unwrap();
     for step in 0..12 {
         project = store
             .save(project.id, project.revision, &format!("Ide {step}"))

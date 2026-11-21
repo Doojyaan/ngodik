@@ -24,8 +24,12 @@ fn list_projects(state: State<'_, Store>) -> Result<Vec<ProjectSummary>, Project
 }
 
 #[tauri::command]
-fn create_project(state: State<'_, Store>, title: String) -> Result<Project, ProjectError> {
-    store(&state)?.create(&title)
+fn create_project(
+    state: State<'_, Store>,
+    title: String,
+    idea: Option<String>,
+) -> Result<Project, ProjectError> {
+    store(&state)?.create(&title, idea.as_deref().unwrap_or_default())
 }
 
 #[tauri::command]

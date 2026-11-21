@@ -35,6 +35,8 @@ pub struct ProjectSummary {
     id: i64,
     title: String,
     updated_at: i64,
+    draft_status: Option<String>,
+    completed_stages: u32,
 }
 
 #[derive(Serialize)]
@@ -81,34 +83,43 @@ impl ProjectStore {
 
     pub fn list(&self) -> Result<Vec<ProjectSummary>> {
         let mut query = self.connection.prepare(
-            "SELECT id, title, updated_at FROM projects ORDER BY updated_at DESC, id DESC",
+            "SELECT p.id, p.title, p.updated_at, run.status,
+                 (SELECT COUNT(*) FROM draft_stages WHERE run_id=run.id AND status='completed')
+             FROM projects p
+             LEFT JOIN draft_runs run ON run.id=(SELECT id FROM draft_runs WHERE project_id=p.id ORDER BY id DESC LIMIT 1)
+             ORDER BY p.updated_at DESC,p.id DESC",
         )?;
         let projects = query.query_map([], |row| {
             Ok(ProjectSummary {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 updated_at: row.get(2)?,
+                draft_status: row.get(3)?,
+                completed_stages: row.get(4)?,
             })
         })?;
         Ok(projects.collect::<rusqlite::Result<_>>()?)
     }
 
-    pub fn create(&mut self, title: &str) -> Result<Project> {
+    pub fn create(&mut self, title: &str, idea: &str) -> Result<Project> {
         let title = title.trim();
         if title.is_empty() || title.chars().count() > 100 {
             return Err(ProjectError::InvalidTitle);
+        }
+        if idea.len() > MAX_IDEA_BYTES {
+            return Err(ProjectError::IdeaTooLong);
         }
 
         let timestamp = now();
         let transaction = self.connection.transaction()?;
         transaction.execute(
-            "INSERT INTO projects (title, updated_at) VALUES (?1, ?2)",
-            params![title, timestamp],
+            "INSERT INTO projects (title, idea, updated_at) VALUES (?1, ?2, ?3)",
+            params![title, idea, timestamp],
         )?;
         let id = transaction.last_insert_rowid();
         transaction.execute(
-            "INSERT INTO idea_checkpoints VALUES (?1, 0, '', ?2)",
-            params![id, timestamp],
+            "INSERT INTO idea_checkpoints VALUES (?1, 0, ?2, ?3)",
+            params![id, idea, timestamp],
         )?;
         let project = Self::read(&transaction, id)?;
         transaction.commit()?;

@@ -92,10 +92,10 @@ export function ModelSettings({ back }: { back: () => void }) {
   return <main className="workspace">
     <div className="workspace-heading">
       <button className="back" disabled={busy} onClick={back}>← Proyek saya</button>
-      <h1>Pengaturan model</h1>
-      <p>Tambahkan endpoint kompatibel OpenAI milik Anda untuk dipakai oleh proyek.</p>
+      <h1 tabIndex={-1}>Setelan</h1>
+      <p>Kelola profil endpoint dan API key untuk proyek di perangkat ini.</p>
     </div>
-    <div className="workspace-grid">
+    <div className="workspace-grid settings-grid">
       <section className="editor settings" aria-label="Detail profil" aria-busy={busy}>
         <h2>{selected ? "Profil koneksi" : "Profil baru"}</h2>
         <form onSubmit={save} className="settings-form">
@@ -156,7 +156,7 @@ export function ModelSettings({ back }: { back: () => void }) {
         <div role="status">{busy ? "Memproses…" : notice}</div>
         {problem && <p className="error" role="alert">{problem}</p>}
       </section>
-      <aside className="recent">
+      <aside className="editor recent settings-profiles">
         <h2>Profil tersimpan</h2>
         <button disabled={busy} onClick={() => select()}>+ Profil baru</button>
         <ul className="profile-list">{profiles.map((profile) => <li key={profile.id}>

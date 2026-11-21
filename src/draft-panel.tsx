@@ -24,6 +24,13 @@ type Snapshot = { target: Target | null; current: Run | null; previous: Run | nu
 const stepLabels: Record<Step["stage"], string> = {
   product: "Produk dan kebutuhan", analyst: "Analisis sistem", ux: "Pengalaman pengguna", architect: "Arsitektur solusi"
 };
+const filenames: Record<Step["stage"], string> = {
+  product: "PROJECT_SPECIFICATION.json",
+  analyst: "SYSTEM_ANALYSIS.json",
+  ux: "UX_SPECIFICATION.json",
+  architect: "SOLUTION_ARCHITECTURE.json",
+};
+export const stages = (Object.keys(stepLabels) as Step["stage"][]).map((name) => ({ name, label: stepLabels[name] }));
 const statuses: Record<Step["status"], string> = {
   waiting: "Menunggu", running: "Sedang diproses", completed: "Selesai", failed: "Gagal",
   canceled: "Dibatalkan", interrupted: "Terhenti"
@@ -92,8 +99,43 @@ function Results({ run }: { run: Run }) {
   })}</div>;
 }
 
-export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion }: {
+function ArtifactReader({ run }: { run: Run | null | undefined }) {
+  const [selected, setSelected] = useState<Step["stage"]>("product");
+  const documents = run?.stages.filter(({ output }) => output && (!("sections" in output) || output.sections.length > 0)) ?? [];
+  const active = documents.find(({ stage }) => stage === selected) ?? documents[0];
+  const text = active ? JSON.stringify(active.output, null, 2) : "";
+  const lines = text.split("\n");
+  return <section className="artifact-view" aria-labelledby="artifact-title">
+    <header className="section-heading">
+      <h2 id="artifact-title">Artefak</h2>
+      <p className="meta">{documents.length} dokumen tersedia{run ? ` · Draf ${run.id}` : ""}</p>
+    </header>
+    {active ? <div className="artifact-layout">
+      <nav className="editor artifact-list" aria-label="Dokumen draf">
+        {documents.map(({ stage, output }) => <button key={stage} aria-current={active.stage === stage ? "true" : undefined}
+          onClick={() => setSelected(stage)}>
+          <span className="artifact-dot" aria-hidden="true" />
+          <span>{filenames[stage]}</span>
+          <span className="meta">{(new TextEncoder().encode(JSON.stringify(output)).length / 1024).toFixed(1)} KiB</span>
+        </button>)}
+      </nav>
+      <article className="editor artifact-reader" aria-label={filenames[active.stage]}>
+        <header className="reader-bar"><strong>{filenames[active.stage]}</strong><span className="badge">JSON</span></header>
+        <pre tabIndex={0} aria-label="Isi dokumen JSON"><code>
+          {lines.map((line, index) => <span className="code-line" key={index}>
+            <span className="line-no" aria-hidden="true">{index + 1}</span>
+            <span>{line.split(/("(?:[^"\\]|\\.)*")/g).map((part, token) => token % 2
+              ? <span className="code-string" key={token}>{part}</span> : part)}{"\n"}</span>
+          </span>)}
+        </code></pre>
+      </article>
+    </div> : <div className="editor"><p>Dokumen muncul di sini setelah tahap penyusunan menghasilkan draf.</p></div>}
+  </section>;
+}
+
+export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, view, openModel, openIdea, openArtifacts }: {
   projectId: number; hasIdea: boolean; prepare: () => Promise<number | undefined>; configurationVersion: number;
+  view: "draft" | "artifacts"; openModel: () => void; openIdea: () => void; openArtifacts: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [problem, setProblem] = useState("");
@@ -129,13 +171,24 @@ export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion }
     finally { setAction(""); }
   }
 
+  if (view === "artifacts") {
+    const runWithDocuments = current?.stages.some(({ output }) => Boolean(output)) ? current : snapshot?.previous;
+    return <ArtifactReader key={runWithDocuments?.id} run={runWithDocuments} />;
+  }
+
   return <section className="editor draft-panel" aria-labelledby="draft-title">
-    <h2 id="draft-title">Draf blueprint</h2>
+    <header className="section-heading heading-row">
+      <h2 id="draft-title">Draf blueprint</h2>
+      <span className="badge" data-status={current?.status}>{current ? statuses[current.status] : "Belum ada draf"}</span>
+    </header>
     {target ? <p>Untuk membuat draf, ngodik mengirim ide dan hasil tahap yang dibutuhkan ke <strong className="profile-url">{target.baseUrl}</strong> menggunakan <strong>{target.modelId}</strong>. Provider dapat menyimpan data dan mengenakan biaya sesuai kebijakannya.</p>
-      : <p>Pilih dan simpan satu model di panel Model proyek untuk membuat draf.</p>}
+      : <p>Pilih dan simpan satu model untuk membuat draf.</p>}
 
     {canResume && current && <p>Melanjutkan memakai ide dan tujuan pengiriman proses sebelumnya, yaitu <strong>{current.target.modelId}</strong> di <strong className="profile-url">{current.target.baseUrl}</strong>.</p>}
     <div className="settings-actions">
+      {!target && <button onClick={openModel}>Pilih model</button>}
+      {!hasIdea && <button onClick={openIdea}>Tulis ide</button>}
+      {current?.stages.some(({ output }) => Boolean(output)) && <button onClick={openArtifacts}>Buka artefak</button>}
       {running && current ? <button disabled={Boolean(action)} onClick={() => void run("Membatalkan…", () =>
         invoke("cancel_draft", { projectId, runId: current.id }))}>Batalkan proses</button> : <>
         {canResume && current && <button className="primary" disabled={Boolean(action)} onClick={() => void run("Melanjutkan…", () =>
@@ -149,19 +202,21 @@ export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion }
           })}>{current ? "Buat draf baru" : "Buat draf"}</button>
       </>}
     </div>
-    <p role="status">{action || (current ? statuses[current.status] : "")}</p>
+    <p className="draft-action" role="status">{action || (current ? statuses[current.status] : "")}</p>
     {problem && <p className="error" role="alert">{problem}</p>}
-    {current && <>
+    {current && <div className="draft-layout">
       <ol className="draft-stages" aria-label="Tahap penyusunan">
         {current.stages.map(({ stage, status, error, attempts }) => <li key={stage}>
-          <strong>{stepLabels[stage]}</strong>
+          <strong><span className="step-dot" data-status={status} aria-hidden="true" />{stepLabels[stage]}</strong>
           <span>{statuses[status]}{attempts > 1 ? ` · ${attempts} percobaan` : ""}</span>
           {error && <small className="error">{explain(error)}</small>}
         </li>)}
       </ol>
-      {current.error && <p className="error">{explain(current.error)}</p>}
-      <Results run={current} />
-    </>}
+      <div className="draft-reading">
+        {current.error && <p className="error">{explain(current.error)}</p>}
+        <Results run={current} />
+      </div>
+    </div>}
     {snapshot?.previous && <details className="draft-previous">
       <summary>Draf selesai sebelumnya</summary>
       <Results run={snapshot.previous} />

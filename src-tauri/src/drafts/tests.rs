@@ -14,7 +14,7 @@ fn downstream_document_requires_real_requirement_references() {
 fn restart_preserves_referenced_files_and_discards_interrupted_orphans() {
     let root = std::env::temp_dir().join(format!("ngodik-draft-{}", uuid::Uuid::new_v4()));
     let mut store = ProjectStore::open(std::path::Path::new(":memory:")).unwrap();
-    store.create("Uji").unwrap();
+    store.create("Uji", "").unwrap();
     let target = Target {
         profile_id: "fixture".into(),
         base_url: "https://example.test/v1/".into(),
