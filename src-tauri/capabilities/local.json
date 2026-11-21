@@ -1,0 +1,9 @@
+{
+  "identifier": "local-projects",
+  "description": "Project commands for the main local window.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-destroy",
+    "allow-list-projects", "allow-create-project", "allow-open-project", "allow-save-idea"
+  ]
+}
