@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { DraftPanel } from "./draft-panel";
 import { ProjectModel } from "./model-settings";
+import { useNavigationMotion } from "./navigation-motion";
 
 type Checkpoint = { revision: number; savedAt: number };
 export type Project = { id: number; title: string; idea: string; revision: number; history: Checkpoint[] };
@@ -29,6 +30,8 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
   const [error, setError] = useState("");
   const [configurationVersion, setConfigurationVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>(initial.idea.trim() ? "draft" : "idea");
+  const panelSurface = useRef<HTMLDivElement>(null);
+  useNavigationMotion(panelSurface, panel);
   const current = useRef(initial);
   const latest = useRef(initial.idea);
   const active = useRef<Promise<boolean> | null>(null);
@@ -101,7 +104,7 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
           {panels.map(({ id, label }) => <button key={id} aria-current={panel === id ? "page" : undefined}
             onClick={() => setPanel(id)}>{label}</button>)}
         </nav>
-        <div className="project-detail">
+        <div className="project-detail" ref={panelSurface}>
           <div hidden={panel !== "draft" && panel !== "artifacts"}>
             <DraftPanel projectId={project.id} hasIdea={Boolean(idea.trim())} configurationVersion={configurationVersion}
               view={panel === "artifacts" ? "artifacts" : "draft"} openModel={() => setPanel("model")}

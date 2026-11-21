@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Workspace, type Project } from "./workspace";
 import { ModelSettings } from "./model-settings";
 import { stages } from "./draft-panel";
+import { useNavigationMotion } from "./navigation-motion";
 import "./styles.css";
 
 type Page = "projects" | "new" | "settings" | "workspace";
@@ -23,6 +24,8 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const saveBeforeLeaving = useRef<(() => Promise<boolean>) | null>(null);
+  const pageSurface = useRef<HTMLDivElement>(null);
+  useNavigationMotion(pageSurface, page, "main h1");
   const ideaBytes = new TextEncoder().encode(idea).length;
   const ideaLimit = 16 * 1024;
 
@@ -94,6 +97,7 @@ function App() {
             disabled={busy} onClick={() => void navigate("settings")}><span className="settings-icon" aria-hidden="true" /></button>
         </nav>
       </aside>
+      <div ref={pageSurface}>
       {page === "settings" ? <ModelSettings back={() => void navigate("projects")} />
         : page === "workspace" && project ? <Workspace key={project.id} initial={project}
           saveBeforeLeaving={saveBeforeLeaving} back={() => void navigate("projects")} />
@@ -167,6 +171,7 @@ function App() {
             </section>
           </>}
         </main>}
+      </div>
     </>
   );
 }
