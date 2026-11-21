@@ -55,6 +55,8 @@ fn main() {
         return;
     };
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let directory = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&directory)?;
@@ -91,6 +93,9 @@ fn main() {
             drafts::revisions::revise_draft,
             drafts::revisions::decide_proposal,
             drafts::revisions::restore_blueprint,
+            drafts::export::export_preview,
+            drafts::export::save_blueprint,
+            drafts::export::copy_handoff,
         ])
         .run(context)
         .expect("ngodik gagal dibuka");

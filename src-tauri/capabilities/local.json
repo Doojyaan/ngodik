@@ -26,6 +26,9 @@
     "allow-cancel-draft",
     "allow-revise-draft",
     "allow-decide-proposal",
-    "allow-restore-blueprint"
+    "allow-restore-blueprint",
+    "allow-export-preview",
+    "allow-save-blueprint",
+    "allow-copy-handoff"
   ]
 }

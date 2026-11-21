@@ -21,3 +21,9 @@ tokio-util = { version = "0.7", features = ["rt"] }
 httpdate = "1"
 jsonschema = { version = "0.61.2", default-features = false }
 sha2 = "0.11"
+tauri-plugin-dialog = "2.8.4"
+tauri-plugin-clipboard-manager = "2.5.0"
+zip = { version = "9.8.1", default-features = false }
+tempfile = "3.27.0"
+pulldown-cmark = { version = "0.13.6", default-features = false }
+serde_yaml_ng = "0.10.0"

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::{DraftError, Stage};
+use super::{DraftError, Stage, extras::Artifacts};
 
 const PRODUCT: &str = r#"Write a product brief as exactly one JSON object with these keys:
 title, summary (short plain-language overview), problem, audience (string), goals, inScope, outOfScope (arrays of strings),
@@ -70,6 +70,8 @@ struct Applicability {
 #[serde(deny_unknown_fields)]
 struct Document {
     sections: Vec<Section>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    artifacts: Option<Artifacts>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -158,7 +160,19 @@ pub fn instruction(stage: Stage) -> String {
         }
     };
 
-    format!("{POLICY}\n{role}\n{DOCUMENT}")
+    let extra = match stage {
+        Stage::Analyst => {
+            r#"When a diagram communicates a real flow, add artifacts.flow {"nodes":["label","label"],"edges":[[0,1]]}. Use zero-based indices."#
+        }
+        Stage::Ux => {
+            r#"When a visual wireframe helps, add artifacts.wireframes [{"title":"screen","mobile":false,"elements":["real visible control or region"]}]. Describe concrete screens only when uiUx is true."#
+        }
+        Stage::Architect => {
+            r#"If httpApi is true, add artifacts.apiOperations [{"method":"get","path":"/items/{id}","summary":"…","requestDescription":null,"responseDescription":"…","responseStatus":200,"requirementRefs":["R-1"]}]. Derive operations from requirements, flag unknowns, and omit this field for projects without HTTP. For a real implementation sequence, add artifacts.implementationPlan [{"id":"T-1","title":"…","description":"…","dependsOn":[],"acceptanceCriteria":["…"]}]. Dependencies can refer only to earlier step IDs. For helpful architecture diagrams, add artifacts.flow {"nodes":["label","label"],"edges":[[0,1]]}."#
+        }
+        Stage::Product => "",
+    };
+    format!("{POLICY}\n{role}\n{DOCUMENT}\n{extra}")
 }
 
 pub fn normalize(
@@ -180,5 +194,13 @@ pub fn normalize(
         .iter()
         .map(|req| req.id.as_str())
         .collect();
-    document(value, &refs, applicable)
+    let result = document(value, &refs, applicable)?;
+    if let Some(artifacts) = result.get("artifacts") {
+        let artifacts: Artifacts =
+            serde_json::from_value(artifacts.clone()).map_err(|_| DraftError::InvalidDraft)?;
+        if !artifacts.valid(stage, &refs, spec.applicability.http_api) {
+            return Err(DraftError::InvalidDraft);
+        }
+    }
+    Ok(result)
 }

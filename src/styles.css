@@ -278,3 +278,9 @@ input::placeholder, textarea::placeholder { color: var(--quiet); }
   .change-pair, .version-panel .version-row { grid-template-columns: minmax(0, 1fr); }
   .version-row button { justify-self: start; }
 }
+
+.export-documents { margin: 14px 0 16px; padding: 10px 0; border-block: 1px solid var(--line); }
+.export-documents summary { cursor: pointer; font-weight: 600; }
+.export-documents ul { margin-top: 8px; display: grid; gap: 4px; font: .84rem/1.55 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.export-result { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 12px; }
+.export-result p { font-family: var(--mono); overflow-wrap: anywhere; }

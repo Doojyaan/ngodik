@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { DraftPanel } from "./draft-panel";
+import { ExportPanel } from "./export-panel";
 import { ProjectModel } from "./model-settings";
 import { useNavigationMotion } from "./navigation-motion";
 
@@ -12,12 +13,13 @@ export type Project = { id: number; title: string; idea: string; revision: numbe
 const date = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "medium" });
 const limit = 16 * 1024;
 
-type Panel = "draft" | "artifacts" | "review" | "versions" | "idea" | "model" | "history";
+type Panel = "draft" | "artifacts" | "review" | "versions" | "export" | "idea" | "model" | "history";
 const panels: { id: Panel; label: string }[] = [
   { id: "draft", label: "Draf blueprint" },
   { id: "artifacts", label: "Artefak" },
   { id: "review", label: "Review" },
   { id: "versions", label: "Versi blueprint" },
+  { id: "export", label: "Ekspor" },
   { id: "idea", label: "Ide proyek" },
   { id: "model", label: "Model proyek" },
   { id: "history", label: "Riwayat simpan" },
@@ -75,15 +77,11 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
 
   useEffect(() => {
     saveBeforeLeaving.current = save;
-    const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
-
-  return () => { if (saveBeforeLeaving.current === save) saveBeforeLeaving.current = null; };
+    return () => { if (saveBeforeLeaving.current === save) saveBeforeLeaving.current = null; };
   }, [save, saveBeforeLeaving]);
   useEffect(() => {
     const timer = window.setTimeout(() => void save(), 500);
-    const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
-
-  return () => window.clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [idea, save]);
 
   useEffect(() => {
@@ -95,9 +93,7 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
     void listener.catch(() => {
       setError("Penyimpanan saat menutup jendela tidak tersedia. Simpan sebelum menutup.");
     });
-    const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
-
-  return () => { void listener.then((unlisten) => unlisten()).catch(() => undefined); };
+    return () => { void listener.then((unlisten) => unlisten()).catch(() => undefined); };
   }, [save]);
 
   const draftView = panel === "artifacts" || panel === "review" || panel === "versions" ? panel : "draft";
@@ -122,6 +118,7 @@ export function Workspace({ initial, back, saveBeforeLeaving }: {
               openDraft={() => setPanel("draft")} openReview={() => setPanel("review")}
               prepare={async () => await save() ? current.current.revision : undefined} />
           </div>
+          {panel === "export" && <ExportPanel projectId={project.id} />}
           <section className="editor" aria-labelledby="idea-label" hidden={panel !== "idea"}>
             <label id="idea-label" htmlFor="idea">Ide proyek</label>
             <p id="idea-hint">Apa yang ingin Anda buat, siapa yang akan memakainya, dan apa yang perlu bisa dilakukan?</p>

@@ -20,6 +20,9 @@ fn main() {
             "revise_draft",
             "decide_proposal",
             "restore_blueprint",
+            "export_preview",
+            "save_blueprint",
+            "copy_handoff",
         ]),
     ))
     .expect("failed to build Tauri configuration");

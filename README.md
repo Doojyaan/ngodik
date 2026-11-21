@@ -27,10 +27,16 @@ Endpoint remote harus memakai HTTPS. Untuk API di perangkat sendiri, HTTP dapat 
 
 Simpan satu model pada proyek, tulis ide, lalu periksa alamat pengiriman di panel Draf blueprint. Draf menyimpan salinan ide dan tujuan pengiriman saat proses dimulai. Bila proses gagal, dibatalkan, atau terhenti ketika aplikasi ditutup, **Lanjutkan draf** atau **Coba lagi** memakai salinan tersebut dan meneruskan tahap yang belum selesai. **Buat draf baru** memakai ide dan pilihan model terbaru.
 
-Skema kanonis v1 berada di src-tauri/schemas/project-specification.v1.json. Draf awal sudah menjalani pemeriksaan struktur dasar dan ID kebutuhan. QA semantik dan revisi tersedia di tab Review. Ekspor ZIP dijadwalkan pada Tahap 5.
+Skema kanonis v1 berada di src-tauri/schemas/project-specification.v1.json. Draf awal sudah menjalani pemeriksaan struktur dasar dan ID kebutuhan. QA semantik dan revisi tersedia di tab Review.
 
 ## Meninjau dan memulihkan blueprint
 
 Setelah draf disusun, tab **Review** memisahkan pemeriksaan struktur dan referensi dari satu tinjauan semantik dengan model proyek. Temuan dapat menyertakan saran dan kebutuhan yang terdampak. Menyalin saran ke formulir revisi tidak langsung mengirim permintaan.
 
 Ajukan revisi untuk seluruh blueprint atau dokumen yang tersedia, lalu bandingkan usulan sebelum menerapkan atau membuangnya. **Versi blueprint** menyimpan sepuluh snapshot terbaru dengan checksum. Pemulihan menerbitkan versi aktif baru dari snapshot yang dipilih. Ide di editor mempunyai riwayat simpan sendiri.
+
+## Mengekspor blueprint
+
+Buka tab **Ekspor** untuk melihat dokumen dari versi aktif. Pilih **Simpan ZIP** untuk menentukan lokasi lewat dialog Windows. Paket menyertakan spesifikasi kanonis dan dokumen pendukung sesuai kebutuhan proyek. Temuan yang perlu ditinjau tercatat di README paket dan dokumen terkait.
+
+Gunakan **Salin prompt** untuk menyalin instruksi handoff. Berikan prompt dan paket ZIP kepada Codex atau OpenCode.
