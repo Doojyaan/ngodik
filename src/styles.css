@@ -72,7 +72,7 @@ button, a, summary, input, textarea, select { scroll-margin-block: 20px; }
 }
 .grid-icon { display: grid; grid-template-columns: repeat(2, 6px); gap: 4px; }
 .grid-icon i { width: 6px; height: 6px; border-radius: 2px; background: currentColor; }
-.settings-icon { width: 16px; height: 14px; background: linear-gradient(currentColor,currentColor) 0 1px/16px 1px, linear-gradient(currentColor,currentColor) 0 6px/11px 1px, linear-gradient(currentColor,currentColor) 0 11px/14px 1px; background-repeat: no-repeat; }
+.settings-icon { display: block; width: 20px; height: 20px; }
 
 .profile-icon { position: relative; width: 16px; height: 17px; }
 .profile-icon::before, .profile-icon::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); border: 1.5px solid currentColor; }

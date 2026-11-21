@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Workspace, type Project } from "./workspace";
 import { ModelSettings } from "./model-settings";
 import { stages } from "./draft-panel";
-import { useNavigationMotion } from "./navigation-motion";
+import { useButtonHoverMotion, useNavigationMotion } from "./navigation-motion";
 import "./styles.css";
 
 type Page = "projects" | "new" | "settings" | "workspace";
@@ -26,6 +26,7 @@ function App() {
   const saveBeforeLeaving = useRef<(() => Promise<boolean>) | null>(null);
   const pageSurface = useRef<HTMLDivElement>(null);
   useNavigationMotion(pageSurface, page, "main h1");
+  useButtonHoverMotion(page);
   const ideaBytes = new TextEncoder().encode(idea).length;
   const ideaLimit = 16 * 1024;
 
@@ -97,7 +98,11 @@ function App() {
           </div>
           <div className="rail-utilities">
             <button className="rail-button" title="Setelan" aria-label="Setelan" aria-current={page === "settings" ? "page" : undefined}
-              disabled={busy} onClick={() => void navigate("settings")}><span className="settings-icon" aria-hidden="true" /></button>
+              disabled={busy} onClick={() => void navigate("settings")}><svg className="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65"
+                strokeLinejoin="round" aria-hidden="true" focusable="false">
+                <polygon points="8.43,5.81 9.79,5.20 10.23,2.87 13.77,2.87 14.21,5.20 15.58,5.81 16.78,6.69 19.02,5.90 20.79,8.97 18.99,10.51 19.15,12.00 18.99,13.49 20.79,15.03 19.02,18.10 16.78,17.31 15.58,18.19 14.21,18.80 13.77,21.13 10.23,21.13 9.79,18.80 8.43,18.19 7.22,17.31 4.98,18.10 3.21,15.03 5.01,13.49 4.85,12.00 5.01,10.51 3.21,8.97 4.98,5.90 7.22,6.69" />
+                <circle cx="12" cy="12" r="3.05" />
+              </svg></button>
             <button type="button" className="rail-button" title="Akun lokal" aria-label="Akun lokal" popoverTarget="local-profile">
               <span className="profile-icon" aria-hidden="true" />
             </button>
