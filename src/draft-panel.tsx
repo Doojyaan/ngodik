@@ -181,7 +181,10 @@ export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, 
       <h2 id="draft-title">Draf blueprint</h2>
       <span className="badge" data-status={current?.status}>{current ? statuses[current.status] : "Belum ada draf"}</span>
     </header>
-    {target ? <p>Untuk membuat draf, ngodik mengirim ide dan hasil tahap yang dibutuhkan ke <strong className="profile-url">{target.baseUrl}</strong> menggunakan <strong>{target.modelId}</strong>. Provider dapat menyimpan data dan mengenakan biaya sesuai kebijakannya.</p>
+    {target ? <div className="draft-destination">
+      <p><strong>{target.modelId}</strong> <span className="profile-url">{target.baseUrl}</span></p>
+      <p>Ide dan hasil tahap terkait dikirim ke endpoint ini. Provider dapat menyimpan data dan mengenakan biaya.</p>
+    </div>
       : <p>Pilih dan simpan satu model untuk membuat draf.</p>}
 
     {canResume && current && <p>Melanjutkan memakai ide dan tujuan pengiriman proses sebelumnya, yaitu <strong>{current.target.modelId}</strong> di <strong className="profile-url">{current.target.baseUrl}</strong>.</p>}
@@ -202,7 +205,7 @@ export function DraftPanel({ projectId, hasIdea, prepare, configurationVersion, 
           })}>{current ? "Buat draf baru" : "Buat draf"}</button>
       </>}
     </div>
-    <p className="draft-action" role="status">{action || (current ? statuses[current.status] : "")}</p>
+    <p className={action ? "draft-action" : "visually-hidden"} role="status">{action || (current ? statuses[current.status] : "")}</p>
     {problem && <p className="error" role="alert">{problem}</p>}
     {current && <div className="draft-layout">
       <ol className="draft-stages" aria-label="Tahap penyusunan">

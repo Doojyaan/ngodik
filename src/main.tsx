@@ -89,13 +89,28 @@ function App() {
       <aside className="app-rail" aria-label="ngodik">
         <button className="brand-mark" aria-label="ngodik · Proyek" title="Proyek" disabled={busy} onClick={() => void navigate("projects")}>N</button>
         <nav aria-label="Navigasi utama">
-          <button className="rail-button" title="Proyek" aria-label="Proyek" aria-current={page === "projects" || page === "workspace" ? "page" : undefined}
-            disabled={busy} onClick={() => void navigate("projects")}><span className="grid-icon" aria-hidden="true"><i /><i /><i /><i /></span></button>
-          <button className="rail-button" title="Proyek baru" aria-label="Proyek baru" aria-current={page === "new" ? "page" : undefined}
-            disabled={busy} onClick={() => void navigate("new")}><span aria-hidden="true">+</span></button>
-          <button className="rail-button" title="Setelan" aria-label="Setelan" aria-current={page === "settings" ? "page" : undefined}
-            disabled={busy} onClick={() => void navigate("settings")}><span className="settings-icon" aria-hidden="true" /></button>
+          <div className="rail-pages">
+            <button className="rail-button" title="Proyek" aria-label="Proyek" aria-current={page === "projects" || page === "workspace" ? "page" : undefined}
+              disabled={busy} onClick={() => void navigate("projects")}><span className="grid-icon" aria-hidden="true"><i /><i /><i /><i /></span></button>
+            <button className="rail-button" title="Proyek baru" aria-label="Proyek baru" aria-current={page === "new" ? "page" : undefined}
+              disabled={busy} onClick={() => void navigate("new")}><span aria-hidden="true">+</span></button>
+          </div>
+          <div className="rail-utilities">
+            <button className="rail-button" title="Setelan" aria-label="Setelan" aria-current={page === "settings" ? "page" : undefined}
+              disabled={busy} onClick={() => void navigate("settings")}><span className="settings-icon" aria-hidden="true" /></button>
+            <button type="button" className="rail-button" title="Akun lokal" aria-label="Akun lokal" popoverTarget="local-profile">
+              <span className="profile-icon" aria-hidden="true" />
+            </button>
+          </div>
         </nav>
+        <section id="local-profile" className="profile-popover" popover="auto" aria-labelledby="local-profile-title">
+          <h2 id="local-profile-title">Profil lokal</h2>
+          <p>Proyek dan setelan tersimpan di perangkat ini.</p>
+          <button type="button" onClick={(event) => {
+            event.currentTarget.closest<HTMLElement>("[popover]")?.hidePopover();
+            void navigate("settings");
+          }}>Buka setelan</button>
+        </section>
       </aside>
       <div ref={pageSurface}>
       {page === "settings" ? <ModelSettings back={() => void navigate("projects")} />
@@ -143,33 +158,29 @@ function App() {
             <button className="primary" disabled={busy} onClick={() => void navigate("new")}>Proyek baru</button>
           </header>
           {error && <div className="notice error" role="alert">{error} <button onClick={() => void refresh()}>Muat ulang</button></div>}
-          {!loading && projects.length === 0 && !error && <section className="empty-home">
-            <div><h2>Dari ide ke blueprint.</h2><p>Tulis ide Anda. ngodik menyusun dokumen proyek yang bisa Anda tinjau dan serahkan ke coding agent.</p></div>
-            <div className="editor"><h3>Proyek pertama</h3><p>Proyek tersimpan di perangkat ini.</p>
-              <button className="primary" onClick={() => void navigate("new")}>Buat proyek pertama</button></div>
+          {!loading && projects.length === 0 && !error && <section className="empty-home" aria-labelledby="empty-projects">
+            <span className="file-mark" aria-hidden="true" />
+            <div>
+              <h2 id="empty-projects">Belum ada proyek</h2>
+              <p>Mulai dengan ide singkat. Draf blueprint dan riwayatnya tersimpan di perangkat ini.</p>
+            </div>
           </section>}
-          {projects.length > 0 && <>
-            <ul className="project-cards" aria-label="Proyek tersimpan">
+          {projects.length > 0 && <section className="project-register" aria-label="Daftar proyek">
+            <div className="project-columns" aria-hidden="true">
+              <span>Nama proyek</span><span>Status draf</span><span>Progres</span><span>Terakhir disunting</span>
+            </div>
+            <ul>
               {projects.map(({ id, title, updatedAt, draftStatus, completedStages }) => <li key={id}>
-                <button className="project-card" disabled={busy} onClick={() => void enter(id)}>
-                  <strong>{title}</strong>
-                  <span className="project-progress" aria-hidden="true">
-                    {stages.map(({ name }, index) => <i key={name} data-complete={index < completedStages} data-finished={draftStatus === "completed"} />)}
-                  </span>
-                  <span className="card-meta"><span className="meta">{completedStages} dari {stages.length} tahap</span>
-                    <span className={draftStatus === "completed" ? "success" : "accent"}>{projectStatuses[draftStatus ?? ""] ?? "Belum ada draf"}</span></span>
+                <button className="project-row" disabled={busy} onClick={() => void enter(id)}>
+                  <span className="project-name"><span className="file-mark" aria-hidden="true" /><strong>{title}</strong></span>
+                  <span className="project-state"><span className="step-dot" data-status={draftStatus} aria-hidden="true" />
+                    <span>{projectStatuses[draftStatus ?? ""] ?? "Belum ada draf"}</span></span>
+                  <span className="project-count">{completedStages} / {stages.length} tahap</span>
                   <time dateTime={new Date(updatedAt).toISOString()}>{dates.format(updatedAt)}</time>
                 </button>
               </li>)}
             </ul>
-            <section className="activity" aria-labelledby="recent-heading">
-              <h2 id="recent-heading">Terakhir disunting</h2>
-              <ul>{projects.slice(0, 5).map(({ id, title, updatedAt }) => <li key={id}>
-                <time dateTime={new Date(updatedAt).toISOString()}>{dates.format(updatedAt)}</time>
-                <button disabled={busy} onClick={() => void enter(id)}>{title}</button>
-              </li>)}</ul>
-            </section>
-          </>}
+          </section>}
         </main>}
       </div>
     </>
