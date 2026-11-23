@@ -57,8 +57,9 @@ button, a, summary, input, textarea, select { scroll-margin-block: 20px; }
 }
 .brand-mark {
   width: 32px; height: 32px; min-height: 32px; padding: 0; display: grid; place-items: center;
-  color: var(--amber); font: 700 17px var(--mono); letter-spacing: -.08em; border-radius: 8px;
+  border: 0; background: transparent; border-radius: 8px;
 }
+.brand-mark img { display: block; width: 32px; height: 32px; border-radius: 8px; }
 .app-rail nav { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 6px; margin-top: 25px; }
 .rail-pages, .rail-utilities { display: grid; justify-items: center; gap: 5px; }
 .rail-utilities { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--glass-edge); }

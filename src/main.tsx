@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import ngodikAppIcon from "../assets/branding/ngodik-app-icon.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { Workspace, type Project } from "./workspace";
 import { ModelSettings } from "./model-settings";
@@ -90,7 +91,7 @@ function App() {
   return (
     <>
       <aside className="app-rail" aria-label="ngodik">
-        <button className="brand-mark" aria-label="ngodik · Proyek" title="Proyek" disabled={busy} onClick={() => void navigate("projects")}>N</button>
+        <button className="brand-mark" aria-label="ngodik · Proyek" title="Proyek" disabled={busy} onClick={() => void navigate("projects")}><img src={ngodikAppIcon} alt="" /></button>
         <nav aria-label="Navigasi utama">
           <div className="rail-pages">
             <button className="rail-button" title="Proyek" aria-label="Proyek" aria-current={page === "projects" || page === "workspace" ? "page" : undefined}
