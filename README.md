@@ -2,7 +2,11 @@
 
 > A local-first Windows desktop app for turning an idea into a structured project blueprint.
 
-![ngodik logo](assets/branding/ngodik-horizontal.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Doojyaan/ngodik/main/assets/branding/ngodik-horizontal-white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Doojyaan/ngodik/main/assets/branding/ngodik-horizontal.svg">
+  <img src="https://raw.githubusercontent.com/Doojyaan/ngodik/main/assets/branding/ngodik-horizontal.svg" alt="ngodik" width="420">
+</picture>
 
 **Status: Alpha** · [User guide in Indonesian](docs/USER_GUIDE_ID.md) · [Development guide](docs/DEVELOPMENT.md) · [Architecture decisions](ARCHITECTURE_DECISIONS.md) · [Brand assets](docs/BRANDING.md)
 
